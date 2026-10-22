@@ -169,9 +169,9 @@ func (c *Controller) mark(ctx context.Context, d domain.TacticalDecision, ev dom
 		taskKind: d.RecommendedTask,
 		until:    time.Now().Add(20 * time.Minute),
 	}
-	if ev.Type == domain.AnomalyAISDarkEEZ && d.TargetCoordinates != nil {
-		a.at = geo.Point{Lat: d.TargetCoordinates.Lat, Lon: d.TargetCoordinates.Lon}
-	}
+	// The alert sits on the last real report, also for dark vessels: their
+	// estimated position is drawn by ING (dead-reckoned track), and the
+	// decision's target coordinates are an intercept point for tasking.
 	if taskID != "" && d.RecommendedTask == domain.TaskRFEmitterLocate && d.TargetCoordinates != nil {
 		a.search = &geo.Point{Lat: d.TargetCoordinates.Lat, Lon: d.TargetCoordinates.Lon}
 	}

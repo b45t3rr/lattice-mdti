@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/b45t3rr/lattice-mdti/internal/domain"
+	"github.com/b45t3rr/lattice-mdti/internal/geo"
 	"github.com/b45t3rr/lattice-mdti/internal/tier2"
 )
 
@@ -256,6 +257,19 @@ func TestEvidenceHeadlines(t *testing.T) {
 	h, _ = Evidence(domain.AnomalyEvent{Type: domain.AnomalyAISDarkEEZ, Metrics: map[string]float64{
 		"gap_s": 192, "signed_dist_nm": 5, "dr_inside": 0, "inward_angle_deg": 12, "course_change_deg": 70}})
 	assert.Equal(t, "AIS SILENT 3m12s · last report 5.0 NM outside the 200 NM line · heading into the EEZ (12° off the inward normal) · turned 70° before going silent", h)
+}
+
+func TestDarkVesselAlertSitsOnLastReport(t *testing.T) {
+	f := &fakeLattice{}
+	c := controller(f, &fakeING{})
+	d, ev := ghostDecision()
+	ev.Type = domain.AnomalyAISDarkEEZ
+	ev.Window = []domain.Frame{{Lat: -46.37, Lon: -60.80}}
+	d.TargetCoordinates = &domain.Coordinates{Lat: -46.20, Lon: -61.10} // intercept point, inside the EEZ
+	c.Handle(context.Background(), d, ev, "")
+	a := c.alerts[d.EntityID]
+	require.NotNil(t, a)
+	assert.Equal(t, geo.Point{Lat: -46.37, Lon: -60.80}, a.at)
 }
 
 func TestPicksNearestIdleAsset(t *testing.T) {

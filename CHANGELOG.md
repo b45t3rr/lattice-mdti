@@ -4,7 +4,9 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] — 2026-10-22
+
+First public release.
 
 ### Added
 
@@ -37,6 +39,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `internal/tier1/coverage.go` was excluded by a `coverage.*` ignore rule, so a fresh clone of the
+  1.0.0 tree did not build.
+- Dark-vessel alerts sat on the decision's intercept point; they now sit on the last real report
+  (the estimated position is the dead-reckoned track).
 - A receiver's own `aircraft.json` reports `now` in seconds; it was read as milliseconds.
 - `cmd/demo -hold` was cut short by the overall timeout, which also killed the child processes.
 - Point objectives (RF emitter search) were reported as "target lost".
@@ -44,9 +50,10 @@ All notable changes to this project are documented here. The format follows
   are now labelled by Marine Regions `line_id`.
 - `LATTICE_ENDPOINT` accepts `http://` only on loopback (the offline sandbox).
 
-## [1.0.0] — 2026-10-21
+## [1.0.0] — 2026-10-21 (not published)
 
-First public release. All five SPEC phases are implemented and verified against a live Anduril Lattice Sandbox.
+Tagged locally but never released: its tree did not build because `.gitignore` excluded
+`internal/tier1/coverage.go` (fixed in 1.1.0). All five SPEC phases are implemented and verified against a live Anduril Lattice Sandbox.
 
 ### Added
 
@@ -74,4 +81,4 @@ First public release. All five SPEC phases are implemented and verified against 
 - Open-source scaffolding: Apache-2.0, NOTICE, SECURITY, CONTRIBUTING, Code of Conduct, CI (race,
   staticcheck, govulncheck, recall and determinism gates), CodeQL, Dependabot.
 
-[1.0.0]: https://github.com/b45t3rr/lattice-mdti/releases/tag/v1.0.0
+[1.1.0]: https://github.com/b45t3rr/lattice-mdti/releases/tag/v1.1.0

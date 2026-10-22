@@ -37,6 +37,6 @@ body:
     id: version
     attributes:
       label: Version / commit
-      placeholder: v1.0.0 or commit SHA
+      placeholder: v1.1.0 or commit SHA
     validations:
       required: true

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | v1.0 — all five phases implemented and verified against a live Lattice Sandbox — under review (Step 1 of SDD). No implementation code yet. |
+| **Status** | v1.1 — all five phases implemented and verified against a live Lattice Sandbox; local receivers, offline sandbox and detection-only demo added (§4.5, §8.1.1, §10.3). |
 | **Module** | `github.com/b45t3rr/lattice-mdti` |
 | **License** | Apache-2.0 (open source) — data attributions in `NOTICE` |
 | **Language** | Go 1.27 monorepo |
