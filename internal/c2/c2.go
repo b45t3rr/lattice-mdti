@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"sync"
 	"time"
 
@@ -17,8 +18,10 @@ import (
 	"github.com/anduril/lattice-sdk-go/v5/option"
 
 	"github.com/b45t3rr/lattice-mdti/internal/domain"
+	"github.com/b45t3rr/lattice-mdti/internal/geo"
 	"github.com/b45t3rr/lattice-mdti/internal/lattice"
 	"github.com/b45t3rr/lattice-mdti/internal/tier2"
+	"github.com/b45t3rr/lattice-mdti/internal/viz"
 )
 
 // Task specification URLs (verified live against the Sandbox, SPEC §3.4.5).
@@ -30,6 +33,7 @@ const (
 // EntityAPI is the subset of the entities client C2 uses.
 type EntityAPI interface {
 	OverrideEntity(ctx context.Context, request *Lattice.EntityOverride, opts ...option.RequestOption) (*Lattice.Entity, error)
+	PublishEntity(ctx context.Context, request *Lattice.Entity, opts ...option.RequestOption) (*Lattice.Entity, error)
 }
 
 // TaskAPI is the subset of the tasks client C2 uses.
@@ -52,10 +56,29 @@ type Controller struct {
 	Assets      []tier2.Asset
 	Integration string
 	Log         *slog.Logger
+	// DetectionOnly marks, classifies and draws the evidence but never
+	// dispatches an asset (demo and observation-only deployments).
+	DetectionOnly bool
 
 	mu         sync.Mutex
 	targetTask map[string]string // target entity → open task id
 	assetTask  map[string]string // asset entity → open task id
+	alerts     map[string]*alert // target entity → map marker
+}
+
+// alert is the C2 map marker for one confirmed anomaly.
+type alert struct {
+	at       geo.Point
+	label    string
+	desc     string
+	color    viz.RGBA
+	category domain.ThreatCategory
+	task     string
+	taskKind domain.RecommendedTask
+	done     bool
+	search   *geo.Point // RF search centre
+	evidence []viz.Layer
+	until    time.Time
 }
 
 // Outcome reports what C2 did for one decision.
@@ -66,13 +89,14 @@ type Outcome struct {
 	TaskID       string
 	Asset        string
 	Skipped      string // why a dispatch did not happen
+	Evidence     string // headline of the measured inconsistency (confirmed anomalies)
 }
 
 func (c *Controller) init() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.targetTask == nil {
-		c.targetTask, c.assetTask = map[string]string{}, map[string]string{}
+		c.targetTask, c.assetTask, c.alerts = map[string]string{}, map[string]string{}, map[string]*alert{}
 	}
 }
 
@@ -102,10 +126,127 @@ func (c *Controller) Handle(ctx context.Context, d domain.TacticalDecision, ev d
 		c.ING.StartDeadReckoning(d.EntityID)
 		out.DeadReckoned = true
 	}
-	if d.Action.DispatchTask {
+	switch {
+	case d.Action.DispatchTask && c.DetectionOnly:
+		out.Skipped = "detection-only mode"
+	case d.Action.DispatchTask:
 		out.TaskID, out.Asset, out.Skipped = c.dispatch(ctx, d, ev, evidencePath)
 	}
+	if d.AnomalyConfirmed && (d.Action.Disposition != "" || d.Disposition != "") {
+		out.Evidence = c.mark(ctx, d, ev, out.TaskID)
+	}
 	return out
+}
+
+// mark draws (or refreshes) the alert marker for a confirmed anomaly and
+// returns its evidence headline.
+func (c *Controller) mark(ctx context.Context, d domain.TacticalDecision, ev domain.AnomalyEvent, taskID string) string {
+	if len(ev.Window) == 0 {
+		return ""
+	}
+	last := ev.Window[len(ev.Window)-1]
+	disp := d.Action.Disposition
+	if disp == "" {
+		disp = d.Disposition
+	}
+	color := viz.Orange
+	if disp == domain.DispositionHostile {
+		color = viz.Red
+	}
+	headline, evidence := Evidence(ev)
+	a := &alert{
+		at:       geo.Point{Lat: last.Lat, Lon: last.Lon},
+		label:    fmt.Sprintf("%s · %s", headline, disp),
+		desc:     fmt.Sprintf("%s · %s P=%.2f · %s", headline, d.ThreatCategory, d.ConfidenceScore, d.TacticalReasoning),
+		evidence: evidence,
+		color:    color,
+		category: d.ThreatCategory,
+		task:     taskID,
+		taskKind: d.RecommendedTask,
+		until:    time.Now().Add(20 * time.Minute),
+	}
+	if ev.Type == domain.AnomalyAISDarkEEZ && d.TargetCoordinates != nil {
+		a.at = geo.Point{Lat: d.TargetCoordinates.Lat, Lon: d.TargetCoordinates.Lon}
+	}
+	if taskID != "" && d.RecommendedTask == domain.TaskRFEmitterLocate && d.TargetCoordinates != nil {
+		a.search = &geo.Point{Lat: d.TargetCoordinates.Lat, Lon: d.TargetCoordinates.Lon}
+	}
+	c.mu.Lock()
+	c.alerts[d.EntityID] = a
+	c.mu.Unlock()
+	c.drawAlert(ctx, d.EntityID, a)
+	return headline
+}
+
+func (c *Controller) drawAlert(ctx context.Context, entityID string, a *alert) {
+	layers := append(viz.Alert(entityID, a.at, a.label, a.desc, a.color), a.evidence...)
+	if a.search != nil {
+		layers = append(layers, viz.SearchArea(entityID, *a.search, 5000))
+	}
+	now := time.Now().UTC()
+	for _, l := range layers {
+		if _, err := c.Entities.PublishEntity(ctx, l.Entity(c.Integration+"-c2", now, a.until)); err != nil {
+			c.Log.Warn("alert layer publish failed", "layer", l.ID, "err", lattice.Describe(err))
+		}
+	}
+}
+
+// Run keeps alert markers alive and updates them when their task ends.
+func (c *Controller) Run(ctx context.Context) {
+	c.init()
+	tick := time.NewTicker(5 * time.Second)
+	defer tick.Stop()
+	refresh := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		c.mu.Lock()
+		pending := map[string]*alert{}
+		for id, a := range c.alerts {
+			pending[id] = a
+		}
+		c.mu.Unlock()
+		redraw := time.Since(refresh) > time.Minute
+		if redraw {
+			refresh = time.Now()
+		}
+		for id, a := range pending {
+			changed := false
+			if a.task != "" && !a.done {
+				t, err := c.Tasks.GetTask(ctx, &Lattice.GetTaskRequest{TaskID: a.task})
+				if err == nil && t.Status != nil && t.Status.Status != nil && Terminal(*t.Status.Status) {
+					a.done, changed = true, true
+					a.label = outcomeLabel(a, *t.Status.Status)
+					c.Log.Info("task outcome on map", "target", id, "label", a.label)
+				}
+			}
+			if changed || redraw {
+				c.drawAlert(ctx, id, a)
+			}
+		}
+	}
+}
+
+// outcomeLabel is the marker label after the ISR task ended. The agent is a
+// simulator, so results are stated as simulated where they imply sensing.
+func outcomeLabel(a *alert, st Lattice.TaskStatusStatus) string {
+	if st != Lattice.TaskStatusStatusStatusDoneOk {
+		return fmt.Sprintf("MDTI ALERT · %s · %s ended %s", a.category, shortTask(a.taskKind), st)
+	}
+	switch a.category {
+	case domain.ThreatADSBGhost:
+		return "VID COMPLETE (sim) · no aircraft at reported position · GHOST CONFIRMED"
+	case domain.ThreatGNSSSpoofing:
+		return "RF SEARCH COMPLETE (sim) · spoofing emitter area surveyed"
+	case domain.ThreatAISDark, domain.ThreatIUUFishing:
+		return "VID COMPLETE (sim) · dark vessel visually identified"
+	case domain.ThreatKinematicSpoof:
+		return "SHADOW COMPLETE (sim) · real aircraft position confirmed"
+	}
+	return fmt.Sprintf("%s COMPLETE (sim)", shortTask(a.taskKind))
 }
 
 func (c *Controller) override(ctx context.Context, entityID string, d Lattice.MilViewDisposition) error {
@@ -133,15 +274,12 @@ func annotation(d domain.TacticalDecision, evidencePath string) string {
 
 // dispatch creates the ISR task, one open task per target and per asset.
 func (c *Controller) dispatch(ctx context.Context, d domain.TacticalDecision, ev domain.AnomalyEvent, evidencePath string) (taskID, asset, skipped string) {
-	a, ok := c.assetFor(ev.Domain)
-	if !ok {
-		return "", "", "no asset for domain " + string(ev.Domain)
-	}
 	if id := c.openTask(ctx, c.targetTask, d.EntityID); id != "" {
-		return "", a.ID, "target already tasked (" + id + ")"
+		return "", "", "target already tasked (" + id + ")"
 	}
-	if id := c.openTask(ctx, c.assetTask, a.ID); id != "" {
-		return "", a.ID, "asset busy (" + id + ")"
+	a, why := c.pickAsset(ctx, ev.Domain, d.TargetCoordinates)
+	if why != "" {
+		return "", "", why
 	}
 	spec, err := Specification(d.RecommendedTask, d.EntityID, d.TargetCoordinates)
 	if err != nil {
@@ -198,13 +336,34 @@ func Terminal(s Lattice.TaskStatusStatus) bool {
 	return false
 }
 
-func (c *Controller) assetFor(d domain.Domain) (tier2.Asset, bool) {
+// pickAsset returns the idle asset of the domain closest to the target
+// (home position when the target is unknown).
+func (c *Controller) pickAsset(ctx context.Context, d domain.Domain, at *domain.Coordinates) (tier2.Asset, string) {
+	var best tier2.Asset
+	bestD, seen := math.Inf(1), 0
 	for _, a := range c.Assets {
-		if a.Domain == d {
-			return a, true
+		if a.Domain != d {
+			continue
+		}
+		seen++
+		if c.openTask(ctx, c.assetTask, a.ID) != "" {
+			continue
+		}
+		dist := 0.0
+		if at != nil {
+			dist = geo.Haversine(geo.Point{Lat: a.Lat, Lon: a.Lon}, geo.Point{Lat: at.Lat, Lon: at.Lon})
+		}
+		if dist < bestD {
+			best, bestD = a, dist
 		}
 	}
-	return tier2.Asset{}, false
+	switch {
+	case seen == 0:
+		return best, "no asset for domain " + string(d)
+	case best.ID == "":
+		return best, "all assets busy"
+	}
+	return best, ""
 }
 
 // Specification builds the task specification (SPEC §3.4.5): VisualId and

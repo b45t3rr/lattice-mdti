@@ -38,6 +38,8 @@ commands:
   cancel <id>                request cancellation of a task
   clear <entity-id>          remove MDTI's disposition override from an entity
   target [-lat -lon -for d]  publish a stationary test track (mdti-validate-target) for task checks
+  viz-probe [-for d]         publish one example of every map element near Moron to check C2 rendering
+  panel-probe [-for d]       publish six probe tracks to find which fields the C2 track panel shows
 `
 
 func main() {
@@ -79,6 +81,10 @@ func main() {
 		err = clearOverride(ctx, c, args)
 	case "target":
 		err = publishTarget(ctx, c, args)
+	case "panel-probe":
+		err = panelProbe(ctx, c, args)
+	case "viz-probe":
+		err = vizProbe(ctx, c, args)
 	default:
 		flag.Usage()
 		os.Exit(2)

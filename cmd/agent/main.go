@@ -29,14 +29,15 @@ func main() {
 	flag.DurationVar(&b.DwellShadow, "dwell-shadow", b.DwellShadow, "time on target for intercept-and-shadow")
 	flag.DurationVar(&b.DwellRF, "dwell-rf", b.DwellRF, "time on station for RF emitter location")
 	flag.DurationVar(&b.TargetLostAfter, "target-lost", b.TargetLostAfter, "fail the task when the target is not seen for this long")
+	profile := flag.String("profile", "", `"demo" starts SENTINEL-2 and TRIDENT-2 airborne on patrol stations (labelled demo setting)`)
 	flag.Parse()
-	if err := run(*env, b); err != nil {
+	if err := run(*env, b, *profile); err != nil {
 		fmt.Fprintln(os.Stderr, "agent:", err)
 		os.Exit(1)
 	}
 }
 
-func run(envFile string, b agent.Behaviour) error {
+func run(envFile string, b agent.Behaviour, profile string) error {
 	cfg, err := config.Load(envFile)
 	if err != nil {
 		return err
@@ -52,7 +53,14 @@ func run(envFile string, b agent.Behaviour) error {
 
 	g := &agent.Agent{Unary: c.Unary, Stream: c.Stream, Log: log}
 	instance := fmt.Sprintf("%x", rand.Uint64())
-	for _, a := range agent.DefaultAssets() {
+	assets := agent.DefaultAssets()
+	if profile == "demo" {
+		assets = agent.DemoProfile(assets)
+		log.Warn("DEMO PROFILE: SENTINEL-2 and TRIDENT-2 start airborne on patrol stations")
+	} else if profile != "" {
+		return fmt.Errorf("unknown profile %q", profile)
+	}
+	for _, a := range assets {
 		as := agent.NewAsset(a, b, c.Unary.Entities, c.Unary.Tasks, cfg.Lattice.IntegrationName, log)
 		as.Instance = instance
 		g.Assets = append(g.Assets, as)

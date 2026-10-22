@@ -13,6 +13,7 @@ import (
 	"github.com/b45t3rr/lattice-mdti/internal/domain"
 	"github.com/b45t3rr/lattice-mdti/internal/geo"
 	"github.com/b45t3rr/lattice-mdti/internal/lattice"
+	"github.com/b45t3rr/lattice-mdti/internal/viz"
 )
 
 // Engine owns the per-track lifecycle: first-seen time, the latest frame, and
@@ -229,4 +230,8 @@ func (e *Engine) publishDR(id string, t *track) {
 	ent.Description = Lattice.String("AIS DARK – dead-reckoned since " +
 		t.last.ObservedAt.UTC().Format("15:04:05Z") + " · " + *ent.Description)
 	e.Publisher.Submit(e.overlay(ent, t))
+	// Map layers: where AIS went off and the estimated track since then.
+	for _, l := range viz.DeadReckoning(id, geo.Point{Lat: t.last.Lat, Lon: t.last.Lon}, pos, t.last.ObservedAt) {
+		e.Publisher.Submit(l.Entity(e.Mapper.IntegrationName, now, now.Add(DRExpiry)))
+	}
 }

@@ -309,3 +309,23 @@ func TestSingleWriterLock(t *testing.T) {
 	assert.ErrorIs(t, stopped, ErrDuplicateAgent)
 	assert.Len(t, f.published, before, "does not publish on top of the other instance")
 }
+
+// Found in the live demo: an RF search task (point objective) was failed as
+// "target lost" after 60 s because a point is never refreshed.
+func TestPointObjectiveIsNeverLost(t *testing.T) {
+	s := newSim(t, geo.Point{})
+	s.asset.Behaviour.DwellRF = 20 * time.Second
+	point := geo.Destination(DefaultAssets()[0].Home, 45, 6000)
+	ver := 0
+	id := "rf1"
+	sent := Lattice.TaskStatusStatusStatusSent
+	s.asset.accept(context.Background(), &Lattice.Task{
+		Version: &Lattice.TaskVersion{TaskID: &id, StatusVersion: &ver}, Status: &Lattice.TaskStatus{Status: &sent},
+		Specification: &Lattice.GoogleProtobufAny{Type: Lattice.String("type.googleapis.com/anduril.tasks.v2.Investigate"),
+			ExtraProperties: map[string]any{"objective": map[string]any{"point": map[string]any{"lla": map[string]any{"lat": point.Lat, "lon": point.Lon}}}}},
+	})
+	s.run(10 * 60)
+	got := s.f.statuses()
+	require.NotEmpty(t, got)
+	assert.Equal(t, Lattice.TaskStatusStatus("STATUS_DONE_OK"), got[len(got)-1], "flies to the search area and completes")
+}

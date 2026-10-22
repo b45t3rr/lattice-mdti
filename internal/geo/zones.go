@@ -66,13 +66,17 @@ type registryFile struct {
 type segment struct {
 	a, b           Point
 	minLat, maxLat float64
+	lineID         int
 }
 
 // ZoneSet answers geometric questions against the monitored zones and the
 // 200 NM outer limit lines (the "mile 200" boundary with the high seas).
 type ZoneSet struct {
 	Zones []*Zone
-	outer []segment
+	// PrimaryLineID is the first configured outer limit (the national
+	// 200 NM line; the others bound disputed claims).
+	PrimaryLineID int
+	outer         []segment
 }
 
 // ZoneFix is the result of a position query.
@@ -135,8 +139,12 @@ func LoadZones(registryPath string) (*ZoneSet, error) {
 	for _, id := range reg.OuterLimits.LineIDs {
 		want[id] = true
 	}
+	if len(reg.OuterLimits.LineIDs) > 0 {
+		zs.PrimaryLineID = reg.OuterLimits.LineIDs[0]
+	}
 	for _, f := range fc.Features {
-		if id, ok := f.Properties["line_id"].(float64); !ok || !want[int(id)] {
+		id, ok := f.Properties["line_id"].(float64)
+		if !ok || !want[int(id)] {
 			continue
 		}
 		var lines orb.MultiLineString
@@ -151,7 +159,7 @@ func LoadZones(registryPath string) (*ZoneSet, error) {
 		for _, ls := range dp.MultiLineString(lines) {
 			for i := 1; i < len(ls); i++ {
 				a, b := Point{Lat: ls[i-1][1], Lon: ls[i-1][0]}, Point{Lat: ls[i][1], Lon: ls[i][0]}
-				zs.outer = append(zs.outer, segment{a: a, b: b, minLat: math.Min(a.Lat, b.Lat), maxLat: math.Max(a.Lat, b.Lat)})
+				zs.outer = append(zs.outer, segment{a: a, b: b, minLat: math.Min(a.Lat, b.Lat), maxLat: math.Max(a.Lat, b.Lat), lineID: int(id)})
 			}
 		}
 	}
@@ -237,4 +245,40 @@ func (zs *ZoneSet) ByID(id string) *Zone {
 		}
 	}
 	return nil
+}
+
+// OuterLine is one contiguous piece of a 200 NM outer limit.
+type OuterLine struct {
+	LineID int // Marine Regions line_id
+	Points []Point
+}
+
+// OuterPolylines returns the 200 NM outer-limit lines as polylines, decimated
+// to at most maxPoints each (for display).
+func (zs *ZoneSet) OuterPolylines(maxPoints int) []OuterLine {
+	var lines []OuterLine
+	var cur OuterLine
+	for i, s := range zs.outer {
+		if i == 0 || s.a != zs.outer[i-1].b || s.lineID != zs.outer[i-1].lineID {
+			if len(cur.Points) > 1 {
+				lines = append(lines, cur)
+			}
+			cur = OuterLine{LineID: s.lineID, Points: []Point{s.a}}
+		}
+		cur.Points = append(cur.Points, s.b)
+	}
+	if len(cur.Points) > 1 {
+		lines = append(lines, cur)
+	}
+	for i, l := range lines {
+		if maxPoints > 1 && len(l.Points) > maxPoints {
+			step := float64(len(l.Points)-1) / float64(maxPoints-1)
+			d := make([]Point, 0, maxPoints)
+			for k := range maxPoints {
+				d = append(d, l.Points[int(math.Round(float64(k)*step))])
+			}
+			lines[i].Points = d
+		}
+	}
+	return lines
 }

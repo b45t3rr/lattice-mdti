@@ -262,17 +262,27 @@ func TestEngineDeadReckoning(t *testing.T) {
 	e := NewEngine(m, p, slog.New(slog.DiscardHandler))
 	e.Now = func() time.Time { return now }
 	e.tracks = map[string]*track{}
+	const id = "mdti-ais-701000677"
+	vessel := func() []*Lattice.Entity { // publishes of the vessel itself
+		var out []*Lattice.Entity
+		for _, c := range api.calls {
+			if *c.EntityID == id {
+				out = append(out, c)
+			}
+		}
+		return out
+	}
 
 	f := aisFrame() // 4 m/s on 290°
 	e.handle(f)
 	p.Flush(context.Background())
-	require.Equal(t, 1, api.n())
+	require.Len(t, vessel(), 1)
 
 	now = t0.Add(20 * time.Minute) // vessel went silent
-	e.setDR(drRequest{"mdti-ais-701000677", true})
+	e.setDR(drRequest{id, true})
 	p.Flush(context.Background())
-	require.Equal(t, 2, api.n())
-	dr := api.calls[1]
+	require.Len(t, vessel(), 2)
+	dr := vessel()[1]
 	want := geo.Destination(geo.Point{Lat: f.Lat, Lon: f.Lon}, 290, 4*1200)
 	assert.InDelta(t, want.Lat, *dr.Location.Position.LatitudeDegrees, 1e-9)
 	assert.InDelta(t, want.Lon, *dr.Location.Position.LongitudeDegrees, 1e-9)
@@ -281,17 +291,29 @@ func TestEngineDeadReckoning(t *testing.T) {
 	assert.Equal(t, t0, *dr.Tracked.LastMeasurementTime)
 	assert.Contains(t, *dr.Description, "AIS DARK")
 
+	// Map layers: the estimated track from the last report to the DR position, and an "AIS OFF" marker.
+	var line *Lattice.Entity
+	for _, c := range api.calls {
+		if *c.EntityID == "mdti-dr-track-"+id {
+			line = c
+		}
+	}
+	require.NotNil(t, line)
+	require.Len(t, line.GeoShape.Line.Positions, 2)
+	assert.InDelta(t, f.Lat, *line.GeoShape.Line.Positions[0].LatitudeDegrees, 1e-9)
+	assert.InDelta(t, want.Lat, *line.GeoShape.Line.Positions[1].LatitudeDegrees, 1e-9)
+
 	now = now.Add(30 * time.Second)
 	e.housekeeping() // DR republish keeps the entity alive
 	p.Flush(context.Background())
-	require.Equal(t, 3, api.n())
-	assert.True(t, api.calls[2].Provenance.SourceUpdateTime.After(*dr.Provenance.SourceUpdateTime))
+	require.Len(t, vessel(), 3)
+	assert.True(t, vessel()[2].Provenance.SourceUpdateTime.After(*dr.Provenance.SourceUpdateTime))
 
 	// A real report ends DR.
 	f2 := f
 	f2.ObservedAt = now.Add(time.Second)
 	e.handle(f2)
-	assert.True(t, e.tracks["mdti-ais-701000677"].drSince.IsZero())
+	assert.True(t, e.tracks[id].drSince.IsZero())
 }
 
 func TestEngineIgnoresOutOfOrderAndEvicts(t *testing.T) {

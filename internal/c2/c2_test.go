@@ -27,6 +27,7 @@ type fakeLattice struct {
 	tasks     []*Lattice.TaskCreation
 	status    map[string]Lattice.TaskStatusStatus
 	failTask  bool
+	published []*Lattice.Entity
 }
 
 func (f *fakeLattice) OverrideEntity(_ context.Context, r *Lattice.EntityOverride, _ ...option.RequestOption) (*Lattice.Entity, error) {
@@ -34,6 +35,13 @@ func (f *fakeLattice) OverrideEntity(_ context.Context, r *Lattice.EntityOverrid
 	defer f.mu.Unlock()
 	f.overrides = append(f.overrides, r)
 	return r.Entity, nil
+}
+
+func (f *fakeLattice) PublishEntity(_ context.Context, e *Lattice.Entity, _ ...option.RequestOption) (*Lattice.Entity, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.published = append(f.published, e)
+	return e, nil
 }
 
 func (f *fakeLattice) CreateTask(_ context.Context, r *Lattice.TaskCreation, _ ...option.RequestOption) (*Lattice.Task, error) {
@@ -127,7 +135,7 @@ func TestOneOpenTaskPerTargetAndAsset(t *testing.T) {
 	d2, ev2 := ghostDecision()
 	d2.EntityID, ev2.EntityID = "mdti-adsb-e0c0de", "mdti-adsb-e0c0de"
 	busy := c.Handle(context.Background(), d2, ev2, "")
-	assert.Contains(t, busy.Skipped, "asset busy")
+	assert.Contains(t, busy.Skipped, "all assets busy")
 
 	f.mu.Lock()
 	f.status[first.TaskID] = Lattice.TaskStatusStatusStatusDoneOk // the agent finished
@@ -185,4 +193,69 @@ func TestTaskFailureIsReported(t *testing.T) {
 	out := controller(f, &fakeING{}).Handle(context.Background(), d, ev, "")
 	assert.Contains(t, out.Skipped, "create failed")
 	assert.True(t, out.Overridden, "a failed task does not undo the override")
+}
+
+func TestAlertMarkerAndOutcome(t *testing.T) {
+	f := &fakeLattice{}
+	c := controller(f, &fakeING{})
+	d, ev := ghostDecision()
+	ev.Window = []domain.Frame{{Lat: -34.61, Lon: -58.78}}
+	out := c.Handle(context.Background(), d, ev, "")
+	require.Len(t, f.published, 3, "alert area + hazard point + first-fix evidence")
+	assert.Contains(t, out.Evidence, "GHOST TRACK · first seen", "the outcome carries the headline for logs")
+	assert.Equal(t, "mdti-alert-area-mdti-adsb-e3f00d", *f.published[0].EntityID)
+	assert.Contains(t, *f.published[1].Aliases.Name, "GHOST TRACK · first seen")
+	assert.Contains(t, *f.published[1].Aliases.Name, "· HOSTILE")
+	assert.Contains(t, *f.published[1].Description, "ADSB_GHOST_INJECTION P=0.91")
+	assert.Equal(t, "mdti-evidence-spawn-mdti-adsb-e3f00d", *f.published[2].EntityID)
+
+	f.mu.Lock()
+	f.status[out.TaskID] = Lattice.TaskStatusStatusStatusDoneOk
+	f.mu.Unlock()
+	a := c.alerts["mdti-adsb-e3f00d"]
+	assert.Equal(t, "VID COMPLETE (sim) · no aircraft at reported position · GHOST CONFIRMED",
+		outcomeLabel(a, Lattice.TaskStatusStatusStatusDoneOk))
+}
+
+func TestDetectionOnlyNeverDispatches(t *testing.T) {
+	f := &fakeLattice{}
+	c := controller(f, &fakeING{})
+	c.DetectionOnly = true
+	d, ev := ghostDecision()
+	require.True(t, d.Action.DispatchTask)
+	out := c.Handle(context.Background(), d, ev, "")
+	assert.Empty(t, out.TaskID)
+	assert.Equal(t, "detection-only mode", out.Skipped)
+	assert.True(t, out.Overridden, "the track is still classified")
+	assert.Empty(t, f.tasks, "no task reaches Lattice")
+}
+
+func TestEvidenceHeadlines(t *testing.T) {
+	win := []domain.Frame{{Lat: -35.0, Lon: -58.2}, {Lat: -34.85, Lon: -58.0}}
+	h, layers := Evidence(domain.AnomalyEvent{EntityID: "e", Type: domain.AnomalyKinematicImpossible, Window: win,
+		Metrics: map[string]float64{"jump_m": 22224, "dt_s": 2, "implied_speed_mps": 11112}})
+	assert.Equal(t, "IMPOSSIBLE KINEMATICS · 22.2 km in 2 s · 11,112 m/s (Mach 33)", h)
+	require.Len(t, layers, 1)
+	assert.NotNil(t, layers[0].Shape.Line, "the jump is drawn")
+
+	h, _ = Evidence(domain.AnomalyEvent{Type: domain.AnomalyBaroGNSSDivergence,
+		Metrics: map[string]float64{"delta_alt_ft": 1850, "baseline_ft": 250, "deviation_ft": 1600}})
+	assert.Equal(t, "GNSS/BARO MISMATCH · GNSS altitude +1850 ft from baro (+1600 ft off its baseline)", h)
+
+	h, _ = Evidence(domain.AnomalyEvent{Type: domain.AnomalyAISDarkEEZ, Metrics: map[string]float64{"gap_s": 190, "signed_dist_nm": -3.9}})
+	assert.Equal(t, "AIS SILENT 3m10s · last report 3.9 NM inside the 200 NM line", h)
+
+	h, _ = Evidence(domain.AnomalyEvent{Type: domain.AnomalyAISDarkEEZ, Metrics: map[string]float64{"gap_s": 192, "signed_dist_nm": 5, "dr_inside": 1}})
+	assert.Equal(t, "AIS SILENT 3m12s · last report 5.0 NM outside the 200 NM line · dead-reckoned position now inside the EEZ", h)
+}
+
+func TestPicksNearestIdleAsset(t *testing.T) {
+	f := &fakeLattice{}
+	c := controller(f, &fakeING{})
+	c.Assets = append(c.Assets, tier2.Asset{ID: "mdti-asset-sentinel-2", Domain: domain.DomainAir, Lat: -34.82, Lon: -58.54, SpeedMps: 45})
+	c.Assets[0].Lat, c.Assets[0].Lon = -34.68, -58.64
+	d, ev := ghostDecision()
+	d.TargetCoordinates = &domain.Coordinates{Lat: -34.85, Lon: -58.50} // next to Ezeiza
+	out := c.Handle(context.Background(), d, ev, "")
+	assert.Equal(t, "mdti-asset-sentinel-2", out.Asset)
 }

@@ -15,6 +15,7 @@ theater: { min_lat: -62, max_lat: -30, min_lon: -75, max_lon: -24 }
 # Patrol assets, used to estimate time-to-target when predicting intercept coordinates.
 assets:
   - { id: mdti-asset-sentinel-1, domain: AIR, lat: -34.6763, lon: -58.6428, speed_mps: 45 }
+  - { id: mdti-asset-sentinel-2, domain: AIR, lat: -34.8222, lon: -58.5358, speed_mps: 45 }
   - { id: mdti-asset-trident-2, domain: SEA, lat: -45.7853, lon: -67.4655, speed_mps: 110 }
 calibration:
   date: 2026-10-22

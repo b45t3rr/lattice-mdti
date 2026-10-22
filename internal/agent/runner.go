@@ -17,6 +17,7 @@ import (
 	"github.com/b45t3rr/lattice-mdti/internal/domain"
 	"github.com/b45t3rr/lattice-mdti/internal/geo"
 	"github.com/b45t3rr/lattice-mdti/internal/lattice"
+	"github.com/b45t3rr/lattice-mdti/internal/viz"
 )
 
 // EntityAPI is the subset of the entities client the agent uses.
@@ -89,9 +90,10 @@ type Asset struct {
 	// Instance identifies this process in the asset's provenance. Two agents
 	// driving the same asset would fight over its position and its tasks'
 	// status versions (found live), so each asset has a single writer.
-	Instance   string
-	OnConflict func(error)
-	lastCheck  time.Time
+	Instance    string
+	OnConflict  func(error)
+	lastCheck   time.Time
+	lastStation time.Time
 
 	state       State
 	mode        Mode
@@ -100,13 +102,18 @@ type Asset struct {
 	status      string
 }
 
-// NewAsset builds an asset parked at home.
+// NewAsset builds an asset parked at home, or already on its patrol station.
 func NewAsset(cfg AssetConfig, b Behaviour, ent EntityAPI, tasks TaskAPI, integration string, log *slog.Logger) *Asset {
-	return &Asset{
+	a := &Asset{
 		Cfg: cfg, Behaviour: b, Entities: ent, Tasks: tasks, Integration: integration,
 		Log: log.With("asset", cfg.Name), Inbox: make(chan inbox, 16),
 		state: State{Pos: cfg.Home}, mode: ModeIdle, status: "IDLE at home",
 	}
+	if cfg.Station != nil {
+		a.state = State{Pos: geo.Destination(*cfg.Station, 0, cfg.StationRadius), Heading: 90, SpeedMps: cfg.CruiseMps}
+		a.mode, a.status = ModePatrol, "PATROL on station"
+	}
+	return a
 }
 
 func (a *Asset) now() time.Time {
@@ -252,6 +259,9 @@ func (a *Asset) Step(ctx context.Context, dt float64) {
 		if t.targetID != "" && now.Sub(t.lastFetch) >= a.Behaviour.TargetRefresh {
 			a.refreshTarget(ctx, false)
 		}
+		if t.targetID == "" {
+			t.lastSeen = now // a fixed point (RF search area) cannot be "lost"
+		}
 		switch {
 		case now.Sub(t.lastSeen) > a.Behaviour.TargetLostAfter:
 			a.finish(ctx, Lattice.TaskStatusStatusStatusDoneNotOk, errCode(Lattice.TaskErrorCodeErrorCodeFailed, "target lost"))
@@ -283,12 +293,23 @@ func (a *Asset) Step(ctx context.Context, dt float64) {
 	}
 	switch a.mode {
 	case ModeRTB:
+		if a.Cfg.Station != nil {
+			a.state = StepToward(a.state, *a.Cfg.Station, speed, dt)
+			a.status = fmt.Sprintf("RETURNING to station · %.1f km", geo.Haversine(a.state.Pos, *a.Cfg.Station)/1000)
+			if geo.Haversine(a.state.Pos, *a.Cfg.Station) <= a.Cfg.StationRadius {
+				a.mode, a.status = ModePatrol, "PATROL on station"
+				a.Log.Info("back on station")
+			}
+			break
+		}
 		a.state = StepToward(a.state, a.Cfg.Home, speed, dt)
 		a.status = fmt.Sprintf("RTB · %.1f km to home", geo.Haversine(a.state.Pos, a.Cfg.Home)/1000)
 		if geo.Haversine(a.state.Pos, a.Cfg.Home) < 50 {
 			a.mode, a.state.SpeedMps, a.status = ModeIdle, 0, "IDLE at home"
 			a.Log.Info("landed")
 		}
+	case ModePatrol:
+		a.state = OrbitStep(a.state, *a.Cfg.Station, a.Cfg.StationRadius, speed, dt)
 	case ModeIdle:
 		a.state.SpeedMps = 0
 	}
@@ -306,6 +327,36 @@ func (a *Asset) Step(ctx context.Context, dt float64) {
 	}
 	if a.mode != ModeIdle || now.Sub(a.lastPublish) >= 5*time.Second {
 		a.publish(ctx, true)
+		a.publishLayers(ctx, now)
+	}
+}
+
+// publishLayers draws the asset's sensor ring, intercept line and patrol
+// station on the C2 map. They expire shortly after the asset stops moving.
+func (a *Asset) publishLayers(ctx context.Context, now time.Time) {
+	if a.mode == ModeIdle {
+		return
+	}
+	layers := []viz.Layer{viz.SensorRing(a.Cfg.ID, a.Cfg.Name, a.state.Pos, a.sensorRange())}
+	if t := a.task; t != nil && !t.terminated {
+		label := "intercept " + nonEmpty(t.targetID, "search area")
+		layers = append(layers, viz.InterceptLine(a.Cfg.ID, a.Cfg.Name, a.state.Pos, a.predict(now), label))
+	}
+	if a.Cfg.Station != nil && now.Sub(a.lastStation) >= 30*time.Second {
+		a.lastStation = now
+		layers = append(layers, viz.PatrolStation(a.Cfg.ID, a.Cfg.Name, *a.Cfg.Station, a.Cfg.StationRadius))
+	}
+	for _, l := range layers {
+		exp := now.Add(10 * time.Second)
+		if strings.HasPrefix(l.ID, "mdti-station-") {
+			exp = now.Add(2 * time.Minute)
+		}
+		cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		_, err := a.Entities.PublishEntity(cctx, l.Entity(a.Integration+"-agent", now, exp))
+		cancel()
+		if err != nil {
+			a.Log.Debug("layer publish failed", "layer", l.ID, "err", lattice.Describe(err))
+		}
 	}
 }
 

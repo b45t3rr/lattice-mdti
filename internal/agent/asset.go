@@ -23,6 +23,7 @@ const (
 	ModeTransit   Mode = "TRANSIT"
 	ModeOnStation Mode = "ON_STATION"
 	ModeRTB       Mode = "RTB"
+	ModePatrol    Mode = "PATROL" // orbiting its patrol station (demo profile)
 )
 
 // AssetConfig describes one simulated patrol asset.
@@ -35,6 +36,10 @@ type AssetConfig struct {
 	CruiseMps    float64
 	AltHaeM      float64
 	Endurance    time.Duration
+	// Station, when set, is a patrol orbit the asset holds while idle and
+	// returns to after a task (demo profile: assets already airborne).
+	Station       *geo.Point
+	StationRadius float64
 }
 
 // DefaultAssets are SENTINEL-1 at Morón and TRIDENT-2 at Comodoro Rivadavia
@@ -43,9 +48,28 @@ func DefaultAssets() []AssetConfig {
 	return []AssetConfig{
 		{ID: "mdti-asset-sentinel-1", Name: "SENTINEL-1", PlatformType: "UAV", Domain: domain.DomainAir,
 			Home: geo.Point{Lat: -34.6763, Lon: -58.6428}, CruiseMps: 45, AltHaeM: 1500, Endurance: 8 * time.Hour},
+		{ID: "mdti-asset-sentinel-2", Name: "SENTINEL-2", PlatformType: "UAV", Domain: domain.DomainAir,
+			Home: geo.Point{Lat: -34.8222, Lon: -58.5358}, CruiseMps: 45, AltHaeM: 1800, Endurance: 8 * time.Hour},
 		{ID: "mdti-asset-trident-2", Name: "TRIDENT-2", PlatformType: "Maritime Patrol UAV", Domain: domain.DomainSea,
 			Home: geo.Point{Lat: -45.7853, Lon: -67.4655}, CruiseMps: 110, AltHaeM: 3000, Endurance: 24 * time.Hour},
 	}
+}
+
+// DemoProfile places assets on patrol stations so the demo does not wait for
+// long transits: SENTINEL-2 on a CAP over Buenos Aires, TRIDENT-2 over the
+// "Milla 201" fishing grounds. It is a labelled demo setting, not the default.
+func DemoProfile(assets []AssetConfig) []AssetConfig {
+	out := make([]AssetConfig, len(assets))
+	copy(out, assets)
+	for i := range out {
+		switch out[i].ID {
+		case "mdti-asset-sentinel-2":
+			out[i].Station, out[i].StationRadius = &geo.Point{Lat: -34.70, Lon: -58.30}, 6000
+		case "mdti-asset-trident-2":
+			out[i].Station, out[i].StationRadius = &geo.Point{Lat: -46.30, Lon: -61.10}, 6000
+		}
+	}
+	return out
 }
 
 // Supported task specifications (advertised in the task catalog).
