@@ -1,7 +1,7 @@
 # MDTI — Multi-Domain Airspace & Maritime Threat Intelligence
 
-[![CI](https://github.com/b45t3rr/lattice-mdti/actions/workflows/ci.yml/badge.svg)](https://github.com/b45t3rr/lattice-mdti/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/b45t3rr/lattice-mdti/actions/workflows/codeql.yml/badge.svg)](https://github.com/b45t3rr/lattice-mdti/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/b45t3rr/lattice-mdti)](https://github.com/b45t3rr/lattice-mdti/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/b45t3rr/lattice-mdti.svg)](https://pkg.go.dev/github.com/b45t3rr/lattice-mdti)
 [![Go](https://img.shields.io/github/go-mod/go-version/b45t3rr/lattice-mdti)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
