@@ -379,4 +379,3 @@ func TestSimulatedIndicatorOnlyForInjectedTraffic(t *testing.T) {
 		assert.True(t, *e.Indicators.Simulated, src)
 	}
 }
-
