@@ -1,0 +1,73 @@
+{
+  "entityId": "mdti-ais-701000677",
+  "description": "Fishing Vessel PESQUERO UNO",
+  "isLive": true,
+  "location": {
+    "position": {
+      "latitudeDegrees": -38.0463,
+      "longitudeDegrees": -57.5312
+    },
+    "velocityEnu": {
+      "e": -3.7587704831436346,
+      "n": 1.3680805733026729
+    },
+    "speedMps": 4,
+    "attitudeEnu": {
+      "x": 0,
+      "y": 0,
+      "z": -0.9848077530122081,
+      "w": -0.1736481776669303
+    }
+  },
+  "aliases": {
+    "alternateIds": [
+      {
+        "id": "701000677",
+        "type": "ALT_ID_TYPE_MMSI_ID"
+      },
+      {
+        "id": "9123456",
+        "type": "ALT_ID_TYPE_IMO_ID"
+      },
+      {
+        "id": "LW1234",
+        "type": "ALT_ID_TYPE_CALLSIGN"
+      }
+    ],
+    "name": "PESQUERO UNO"
+  },
+  "tracked": {
+    "trackQualityWrapper": 3,
+    "lastMeasurementTime": "2026-10-21T19:41:42Z"
+  },
+  "milView": {
+    "disposition": "DISPOSITION_NEUTRAL",
+    "environment": "ENVIRONMENT_SURFACE",
+    "nationality": "NATIONALITY_ARGENTINA"
+  },
+  "ontology": {
+    "platformType": "Fishing Vessel",
+    "template": "TEMPLATE_TRACK"
+  },
+  "provenance": {
+    "integrationName": "mdti",
+    "dataType": "ais",
+    "sourceDescription": "aisstream",
+    "sourceUpdateTime": "2026-10-21T19:41:42Z"
+  },
+  "dataClassification": {
+    "default": {
+      "level": "CLASSIFICATION_LEVELS_UNCLASSIFIED"
+    }
+  },
+  "dimensions": {
+    "lengthM": 42
+  },
+  "symbology": {
+    "milStd2525C": {
+      "sidc": "SNSPXF---------"
+    }
+  },
+  "createdTime": "2026-10-21T19:41:42Z",
+  "expiryTime": "2026-10-21T19:56:42Z"
+}

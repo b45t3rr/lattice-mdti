@@ -1,0 +1,15 @@
+.env
+bin/
+*.jsonl
+*.exe
+*.test
+*.out
+coverage.*
+!testdata/**/*.jsonl
+# Local tooling configuration (not part of the project)
+.claude/
+.agents/
+.grok/
+skills-lock.json
+# Demo run artefacts (logs); the published GIF lives in docs/
+demo-logs/

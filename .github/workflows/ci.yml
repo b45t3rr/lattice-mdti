@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build, lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+      - name: Test (race detector)
+        run: go test -race -count=1 ./...
+
+  gates:
+    name: Detection and determinism gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: Tier-1 recall on all red-team scenarios (must be 1.0)
+        run: |
+          S=scenarios/kinematic.yaml,scenarios/baro_gnss.yaml,scenarios/ghost_sadm.yaml,scenarios/dark_vessel_eez.yaml
+          for seed in 1 2 3 42; do
+            go run ./cmd/redteam -scenario=$S -seed=$seed -out=rt.jsonl -truth=rt.truth.jsonl
+            go run ./cmd/evaluate -frames=rt.jsonl -truth=rt.truth.jsonl
+          done
+      - name: Red-team renders are byte-identical
+        run: |
+          S=scenarios/kinematic.yaml,scenarios/baro_gnss.yaml,scenarios/ghost_sadm.yaml,scenarios/dark_vessel_eez.yaml
+          go run ./cmd/redteam -scenario=$S -out=a.jsonl -truth=a.truth.jsonl
+          go run ./cmd/redteam -scenario=$S -out=b.jsonl -truth=b.truth.jsonl
+          cmp a.jsonl b.jsonl && cmp a.truth.jsonl b.truth.jsonl
+
+  vuln:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

@@ -1,0 +1,13 @@
+{
+  "msg": "No error",
+  "now": 1792611702001,
+  "total": 4,
+  "ctime": 1792611702001,
+  "ptime": 0,
+  "ac": [
+    {"hex": "e0aa11", "type": "adsb_icao", "flight": "TST101  ", "r": "LV-TST", "t": "BE20", "alt_baro": 10000, "alt_geom": 10375, "gs": 274.7, "track": 74.0, "true_heading": 71.1, "baro_rate": -1216, "squawk": "1633", "emergency": "none", "category": "A1", "lat": -34.64621, "lon": -59.405374, "nic": 8, "rc": 186, "seen_pos": 0.163, "version": 2, "nac_p": 9, "nac_v": 2, "sil": 3, "sil_type": "perhour", "gva": 2, "sda": 2, "mlat": [], "tisb": [], "messages": 10761, "seen": 0.2, "rssi": -20.1},
+    {"hex": "e0aa12", "type": "adsb_icao", "flight": "TST202  ", "r": "LV-TSU", "t": "A20N", "alt_baro": "ground", "gs": 6.1, "squawk": "1756", "category": "A3", "lat": -34.5540, "lon": -58.4232, "nic": 8, "seen_pos": 0.8, "version": 2, "nac_p": 9, "sil": 3, "mlat": [], "tisb": [], "seen": 0.8},
+    {"hex": "e0aa13", "type": "mlat", "flight": "TST303  ", "alt_baro": 4125, "gs": 237.0, "track": 131.0, "category": "A1", "lat": -34.3635, "lon": -58.7414, "seen_pos": 1.1, "mlat": ["lat", "lon", "gs", "track"], "tisb": [], "seen": 1.1},
+    {"hex": "e0aa14", "type": "adsb_icao", "flight": "TST404  ", "t": "B738", "alt_baro": 30475, "alt_geom": 31450, "gs": 351.0, "track": 271.0, "geom_rate": -64, "baro_rate": 0, "squawk": "1543", "category": "A3", "lat": -34.5903, "lon": -59.0819, "nic": 8, "seen_pos": 0.4, "version": 2, "nac_p": 9, "sil": 3, "mlat": [], "tisb": [], "seen": 0.4}
+  ]
+}

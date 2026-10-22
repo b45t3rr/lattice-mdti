@@ -1,0 +1,17 @@
+# Attack 3 — ADS-B ghost injection near Morón Air Base (SPEC §4.4).
+# A new ICAO appears mid-coverage, airborne, with no history and no callsign.
+name: ghost_sadm
+attack: ghost
+seed: 42
+start_after: 30s
+params:
+  icao24: e3f00d          # inside the Argentine 0xE00000–0xE3FFFF block
+  callsign: ""            # empty → ghost booster
+  spawn: { ref: SADM, bearing_deg: 300, range_nm: 8 }
+  alt_ft: 5000
+  speed_kt: 210
+  heading_deg: 120
+  leg_nm: 6
+  duration: 180s
+  rate_hz: 1
+  nac_p: 0                # not reported

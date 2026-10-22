@@ -1,0 +1,75 @@
+{
+  "entityId": "mdti-adsb-e0aa11",
+  "description": "BE20 TST101",
+  "isLive": true,
+  "location": {
+    "position": {
+      "latitudeDegrees": -34.64621,
+      "longitudeDegrees": -59.405374,
+      "altitudeHaeMeters": 3162.3
+    },
+    "velocityEnu": {
+      "e": 135.84335618038384,
+      "n": 38.95245557071531,
+      "u": -6.17728
+    },
+    "speedMps": 141.3177668,
+    "attitudeEnu": {
+      "x": 0,
+      "y": 0,
+      "z": 0.16418684656886298,
+      "w": 0.9864292571764954
+    }
+  },
+  "aliases": {
+    "alternateIds": [
+      {
+        "id": "TST101",
+        "type": "ALT_ID_TYPE_CALLSIGN"
+      },
+      {
+        "id": "LV-TST",
+        "type": "ALT_ID_TYPE_REGISTRATION_ID"
+      }
+    ],
+    "name": "TST101"
+  },
+  "tracked": {
+    "trackQualityWrapper": 4,
+    "lastMeasurementTime": "2026-10-21T19:41:42Z"
+  },
+  "milView": {
+    "disposition": "DISPOSITION_NEUTRAL",
+    "environment": "ENVIRONMENT_AIR"
+  },
+  "ontology": {
+    "platformType": "Light aircraft",
+    "specificType": "BE20",
+    "template": "TEMPLATE_TRACK"
+  },
+  "provenance": {
+    "integrationName": "mdti",
+    "dataType": "adsb",
+    "sourceDescription": "adsbfi",
+    "sourceUpdateTime": "2026-10-21T19:41:42Z"
+  },
+  "transponderCodes": {
+    "mode3": 1633,
+    "modeS": {
+      "address": 14723601
+    },
+    "modeCAltitudeFt": 10000
+  },
+  "dataClassification": {
+    "default": {
+      "level": "CLASSIFICATION_LEVELS_UNCLASSIFIED"
+    }
+  },
+  "symbology": {
+    "milStd2525C": {
+      "sidc": "SNAPCF---------"
+    }
+  },
+  "createdTime": "2026-10-21T19:40:42Z",
+  "expiryTime": "2026-10-21T19:42:42Z"
+}

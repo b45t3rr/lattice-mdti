@@ -1,0 +1,39 @@
+MDTI — Multi-Domain Airspace & Maritime Threat Intelligence on Anduril Lattice
+Copyright 2026 The MDTI Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party data and services
+-----------------------------
+
+Maritime boundaries
+  Flanders Marine Institute (VLIZ). Maritime Boundaries Geodatabase: Maritime
+  Boundaries and Exclusive Economic Zones (200NM), version 12.
+  https://www.marineregions.org/ — licensed under CC-BY 4.0.
+  Polygons in data/geo/zones/ and 200 NM lines in data/geo/boundaries/ are
+  redistributed unmodified. Their legal status
+  annotations in data/geo/zones.yaml are MDTI configuration, not part of the
+  dataset, and do not represent a position of VLIZ.
+
+ADS-B data
+  adsb.fi — community ADS-B aggregator, https://adsb.fi/ (default source).
+  adsb.fi open data is for personal, non-commercial use only; contact adsb.fi
+  for commercial or higher-rate access. No adsb.fi data is redistributed in
+  this repository: parser tests use the synthetic fixture
+  testdata/adsb/synthetic_readsb_v3.json (fictional aircraft).
+
+  adsb.lol — community ADS-B aggregator, https://adsb.lol/ (fallback source).
+  Data made available under the Open Database License (ODbL).
+  testdata/adsb/adsblol_*.json remains under ODbL.
+
+AIS data
+  AISStream.io — https://aisstream.io/ — subject to the AISStream terms of use.
+  Raw AISStream data is not redistributed in this repository.
+
+Anduril Lattice
+  Uses the Anduril Lattice SDK for Go (github.com/anduril/lattice-sdk-go) under
+  its own license. "Anduril" and "Lattice" are trademarks of Anduril Industries;
+  this project is independent and not affiliated with or endorsed by Anduril.
+
+OpenAI
+  Tier-2 decisions call the OpenAI API under the user's own account and terms.

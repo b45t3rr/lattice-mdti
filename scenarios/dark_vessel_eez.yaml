@@ -1,0 +1,23 @@
+# Attack 4 — EEZ dark vessel at the "Milla 201" (SPEC §4.4).
+# A fishing vessel cruises NNE parallel to, and just outside, the Argentina
+# 200 NM line (≈ 60.9°W at 46.4°S, trending 015°), turns 70° to port (into the EEZ),
+# sends two more reports, then goes silent.
+name: dark_vessel_eez
+attack: dark_vessel
+seed: 42
+start_after: 30s
+params:
+  mmsi: "200000001"       # MID 200 is unallocated: synthetic, no real flag implied
+  ship_name: SYNTHETIC SQUID 1
+  ship_type: 30           # fishing
+  length_m: 65
+  start_lat: -46.40
+  start_lon: -60.80       # ≈ 4.6 NM outside the 200 NM line
+  course_deg: 15          # parallel to the line
+  speed_kt: 9
+  cruise_duration: 10m
+  turn_deg: -70
+  reports_after_turn: 2
+  report_interval: 10s    # Class A, 0–14 kn
+  dark_min_gap: 10m       # ground-truth window opens after the Tier-1 dark timeout
+  truth_horizon: 60m

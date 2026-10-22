@@ -1,0 +1,20 @@
+# Attack 2 — Baro/GNSS divergence, the classic GPS-spoofing signature (SPEC §4.4).
+# Geometric altitude ramps +80 ft/s away from a stable barometric altitude while
+# navigation integrity (NACp/NIC) collapses.
+name: baro_gnss_spoof
+attack: baro_gnss
+seed: 42
+start_after: 30s
+target:
+  mode: hijack
+  hijack_wait: 60s
+params:
+  icao24: e0babe
+  callsign: ARG5678
+  normal_duration: 60s
+  ramp_ft_per_s: 80
+  max_offset_ft: 3000
+  nac_p_spoofed: 4
+  nic_spoofed: 3
+  attack_duration: 90s
+  rate_hz: 1

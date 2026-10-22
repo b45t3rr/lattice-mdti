@@ -1,0 +1,26 @@
+# Tier-2 decision policy (SPEC §7.5). Versioned by file hash in every decision's audit.
+# Thresholds calibrated by `go run ./cmd/calibrate -write` on 2026-10-22 (SPEC §7.8).
+question_set: q-v1
+thresholds:
+  confirm: 0.83          # P(anomaly_confirmed) to treat the anomaly as real
+  hostile: 0.91          # P(anomaly_confirmed) required for HOSTILE
+  category: 0.50         # choice confidence below this → UNKNOWN (review)
+  task: 0.60             # P(anomaly_confirmed) required to dispatch an asset
+  level_hostile: 0.76     # expected threat level for HOSTILE
+  level_suspect: 0.75    # expected threat level for SUSPECT
+flap_protection: 5m0s      # no disposition change more often than this, unless escalating
+cache_ttl: 10m0s           # reuse a decision for the same (entity, anomaly type)
+# Theater box for task coordinates (AMBA + Argentine EEZ incl. South Georgia / South Sandwich).
+theater: { min_lat: -62, max_lat: -30, min_lon: -75, max_lon: -24 }
+# Patrol assets, used to estimate time-to-target when predicting intercept coordinates.
+assets:
+  - { id: mdti-asset-sentinel-1, domain: AIR, lat: -34.6763, lon: -58.6428, speed_mps: 45 }
+  - { id: mdti-asset-trident-2, domain: SEA, lat: -45.7853, lon: -67.4655, speed_mps: 110 }
+calibration:
+  date: 2026-10-22
+  model: gpt-6-luna
+  samples: { hostile: 12, suspect: 6, benign: 12 }
+  suspect_level: { fn: 0, fp: 0, cost_fn: 5, cost_fp: 1 }
+  hostile_level: { fn: 0, fp: 0, cost_fn: 1, cost_fp: 10 }
+  false_hostile_on_benign: 0
+  category_accuracy: "18/18"

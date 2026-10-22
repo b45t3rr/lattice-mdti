@@ -1,0 +1,9 @@
+# Default owner for everything in the repository.
+* @b45t3rr
+
+# Safety-critical areas: guardrails, autonomy, tasking and the agent.
+/internal/tier2/ @b45t3rr
+/internal/c2/    @b45t3rr
+/internal/agent/ @b45t3rr
+/data/tier2/     @b45t3rr
+/SECURITY.md     @b45t3rr

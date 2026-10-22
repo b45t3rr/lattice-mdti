@@ -1,0 +1,7 @@
+[
+  {"icao": "SADM", "name": "Morón Air Base (BAM Morón)",          "lat": -34.6763, "lon": -58.6428, "elev_ft": 95},
+  {"icao": "SAEZ", "name": "Ministro Pistarini Intl (Ezeiza)",    "lat": -34.8222, "lon": -58.5358, "elev_ft": 67},
+  {"icao": "SABE", "name": "Aeroparque Jorge Newbery",            "lat": -34.5592, "lon": -58.4156, "elev_ft": 18},
+  {"icao": "SAVC", "name": "General Mosconi (Comodoro Rivadavia)", "lat": -45.7853, "lon": -67.4655, "elev_ft": 189},
+  {"icao": "SAWE", "name": "Hermes Quijada Intl (Río Grande)",    "lat": -53.7777, "lon": -67.7494, "elev_ft": 65}
+]

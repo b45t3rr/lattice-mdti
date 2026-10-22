@@ -1,0 +1,59 @@
+# Maritime zone registry (SPEC §6.6.1).
+# Geometry files are Marine Regions EEZ v12 features, redistributed UNMODIFIED.
+# legal_status / monitored / policy are MDTI configuration, not part of the dataset.
+# Hashes are verified at start-up; regenerate with `sha256sum` after any dataset update.
+dataset:
+  name: Marine Regions World EEZ (Maritime Boundaries Geodatabase)
+  version: v12
+  license: CC-BY 4.0
+  source: https://geo.vliz.be/geoserver/MarineRegions/wfs (layers eez, eez_boundaries)
+
+simplify_tolerance_deg: 0.001   # Douglas–Peucker, ≈ 100 m
+
+# The "mile 200": 200 NM limits towards the high seas of the monitored areas.
+outer_limits:
+  file: boundaries/outer_limits_200nm.geojson
+  sha256: 2b03757d8e249a6dff8e600f35db80ce9aa09a6e7fe64de18ef92e17c37d85c1
+  line_ids: [3608, 3610, 3721]   # Argentina 200 NM · Falkland/Malvinas 200 NM · South Georgia & S. Sandwich 200 NM
+
+zones:
+  - id: AR_EEZ
+    name: Argentinian Exclusive Economic Zone
+    file: zones/ar_eez.geojson
+    sha256: d5bce657a98f8b560f5d97c779c9f277538fd91852c36dbe0c5d879594325875
+    mrgid: 8466
+    legal_status: SOVEREIGN_EEZ
+    monitored: true
+
+  - id: AR_CLAIMED_MALVINAS
+    name: "Overlapping claim Falkland / Malvinas Islands: United Kingdom / Argentina"
+    file: zones/overlap_malvinas.geojson
+    sha256: e3d67a750b83b7b25b67f171431e52e387977aba11926dd110f1d25f3bf31570
+    mrgid: 8389
+    legal_status: DISPUTED_CLAIMED
+    monitored: true
+    policy:
+      max_autonomous_task: VISUAL_IDENTIFICATION
+      hostile_requires_operator: true
+
+  - id: AR_CLAIMED_SOUTH_GEORGIA_SANDWICH
+    name: "Overlapping claim South Georgia and the South Sandwich Islands: United Kingdom / Argentina"
+    file: zones/overlap_south_georgia_sandwich.geojson
+    sha256: c3d3622c9c5d91aae826b7daf43454921caf25a35df5e14b26bb47a1ec2d1d26
+    mrgid: 8383
+    legal_status: DISPUTED_CLAIMED
+    monitored: true
+    policy:
+      max_autonomous_task: VISUAL_IDENTIFICATION
+      hostile_requires_operator: true
+
+  - id: AR_UY_JOINT_REGIME
+    name: "Joint regime area: Uruguay / Argentina (Río de la Plata common fishing zone)"
+    file: zones/joint_regime_uy_ar.geojson
+    sha256: 045cc73943fdcf16c9628542b9a0ef6ddbc7e343d82a4ddbbdf997c0652912ae
+    mrgid: 48961
+    legal_status: JOINT_REGIME
+    monitored: true
+    policy:
+      max_autonomous_task: VISUAL_IDENTIFICATION
+      hostile_requires_operator: true

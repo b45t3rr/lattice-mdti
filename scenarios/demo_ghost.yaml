@@ -1,0 +1,17 @@
+# Demo scenario (cmd/demo): the SADM ghost, injected 25 s after start-up
+# (after the 20 s Tier-1 warm-up) and kept alive long enough for the intercept.
+name: ghost_sadm_demo
+attack: ghost
+seed: 42
+start_after: 25s
+params:
+  icao24: e3f00d          # inside the Argentine 0xE00000–0xE3FFFF block
+  callsign: ""            # empty → ghost booster
+  spawn: { ref: SADM, bearing_deg: 300, range_nm: 8 }
+  alt_ft: 5000
+  speed_kt: 210
+  heading_deg: 120
+  leg_nm: 6
+  duration: 10m
+  rate_hz: 1
+  nac_p: 0                # not reported

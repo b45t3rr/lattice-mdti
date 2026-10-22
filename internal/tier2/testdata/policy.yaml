@@ -1,0 +1,9 @@
+# Fixed thresholds for unit tests (independent of the calibrated production policy).
+question_set: q-v1
+thresholds: { confirm: 0.60, hostile: 0.80, category: 0.50, task: 0.60, level_hostile: 1.5, level_suspect: 0.75 }
+flap_protection: 5m
+cache_ttl: 10m
+theater: { min_lat: -62, max_lat: -30, min_lon: -75, max_lon: -24 }
+assets:
+  - { id: mdti-asset-sentinel-1, domain: AIR, lat: -34.6763, lon: -58.6428, speed_mps: 45 }
+  - { id: mdti-asset-trident-2,  domain: SEA, lat: -45.7853, lon: -67.4655, speed_mps: 110 }
