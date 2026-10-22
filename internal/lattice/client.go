@@ -8,7 +8,9 @@ package lattice
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -35,8 +37,12 @@ func New(cfg config.Lattice) (*Clients, error) {
 	if err := Validate(cfg); err != nil {
 		return nil, err
 	}
+	base, err := BaseURL(cfg.Endpoint)
+	if err != nil {
+		return nil, err
+	}
 	common := []option.RequestOption{
-		option.WithBaseURL("https://" + cfg.Endpoint),
+		option.WithBaseURL(base),
 		option.WithHTTPHeader(http.Header{
 			"Anduril-Sandbox-Authorization": {"Bearer " + cfg.SandboxesToken.Reveal()},
 		}),
@@ -72,9 +78,47 @@ func Validate(cfg config.Lattice) error {
 	return errors.Join(errs...)
 }
 
+// BaseURL turns LATTICE_ENDPOINT into the API base URL. A bare hostname
+// means HTTPS. Plain HTTP is accepted only on loopback, for the offline
+// sandbox (cmd/sim), so credentials never cross a network unencrypted.
+func BaseURL(endpoint string) (string, error) {
+	if !strings.Contains(endpoint, "://") {
+		return "https://" + endpoint, nil
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("LATTICE_ENDPOINT: %w", err)
+	}
+	switch {
+	case u.Scheme == "https":
+		return strings.TrimSuffix(endpoint, "/"), nil
+	case u.Scheme == "http" && IsLoopback(u.Hostname()):
+		return strings.TrimSuffix(endpoint, "/"), nil
+	}
+	return "", errors.New("LATTICE_ENDPOINT: plain http is only allowed on loopback (offline sandbox)")
+}
+
+// IsLoopback reports whether host names this machine.
+func IsLoopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// IsOffline reports whether the endpoint is the local offline sandbox.
+func IsOffline(endpoint string) bool {
+	u, err := url.Parse(endpoint)
+	return err == nil && u.Scheme == "http" && IsLoopback(u.Hostname())
+}
+
 // RedactEndpoint hides the environment id in a Sandbox hostname for logs and
 // recordings ("<id>.env.sandboxes…" → "***.env.sandboxes…").
 func RedactEndpoint(host string) string {
+	if IsOffline(host) {
+		return "offline sandbox " + host
+	}
 	if i := strings.IndexByte(host, '.'); i > 0 {
 		return "***" + host[i:]
 	}

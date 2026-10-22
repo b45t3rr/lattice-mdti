@@ -88,3 +88,24 @@ func TestRedactEndpoint(t *testing.T) {
 	assert.Equal(t, "***.env.sandboxes.developer.anduril.com", RedactEndpoint("abc123.env.sandboxes.developer.anduril.com"))
 	assert.Equal(t, "***", RedactEndpoint("localhost"))
 }
+
+func TestBaseURL(t *testing.T) {
+	for in, want := range map[string]string{
+		"abc.env.sandboxes.developer.anduril.com": "https://abc.env.sandboxes.developer.anduril.com",
+		"https://abc.example.com/":                "https://abc.example.com",
+		"http://127.0.0.1:8740":                   "http://127.0.0.1:8740",
+		"http://localhost:8740":                   "http://localhost:8740",
+		"http://[::1]:8740":                       "http://[::1]:8740",
+	} {
+		got, err := BaseURL(in)
+		require.NoError(t, err, in)
+		assert.Equal(t, want, got, in)
+	}
+	for _, bad := range []string{"http://abc.example.com", "http://10.0.0.5:8740", "ftp://127.0.0.1"} {
+		_, err := BaseURL(bad)
+		assert.Error(t, err, bad)
+	}
+	assert.True(t, IsOffline("http://127.0.0.1:8740"))
+	assert.False(t, IsOffline("abc.env.sandboxes.developer.anduril.com"))
+	assert.Equal(t, "offline sandbox http://127.0.0.1:8740", RedactEndpoint("http://127.0.0.1:8740"))
+}

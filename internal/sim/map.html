@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MDTI Offline Sandbox</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #111820; --line: #1f2a36; --text: #d7e0ea; --dim: #7d8b99;
+    --hostile: #ff3b30; --suspicious: #ff9f0a; --neutral: #34c759; --friendly: #0a84ff; --unknown: #ffd60a;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { display: grid; grid-template-columns: 1fr 380px; grid-template-rows: 44px 1fr; height: 100%; }
+  header { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line); }
+  header b { letter-spacing: .08em; }
+  .badge { font: 600 11px var(--mono); padding: 3px 8px; border-radius: 3px; letter-spacing: .06em; }
+  .sim { background: #3a2a00; color: var(--unknown); border: 1px solid #6b5200; }
+  #clock { margin-left: auto; font-family: var(--mono); color: var(--dim); }
+  #map { background: #0d1117; }
+  aside { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; }
+  section { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  h2 { margin: 0 0 8px; font: 600 11px var(--mono); color: var(--dim); letter-spacing: .1em; text-transform: uppercase; }
+  .views { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { background: #18222d; color: var(--text); border: 1px solid var(--line); border-radius: 3px;
+    padding: 5px 10px; font: 12px var(--mono); cursor: pointer; }
+  button:hover { border-color: #3a4b5d; }
+  button.on { background: #0a3d6b; border-color: var(--friendly); }
+  .alert { padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .alert:first-of-type { border-top: 0; }
+  .alert:hover .h { text-decoration: underline; }
+  .alert .h { font-weight: 600; }
+  .alert .d { font: 11px var(--mono); }
+  .task { padding: 8px 0; border-top: 1px solid var(--line); }
+  .task:first-of-type { border-top: 0; }
+  .task .t { font-weight: 600; }
+  .task .m { color: var(--dim); font: 11px var(--mono); }
+  .steps { display: flex; gap: 3px; margin-top: 6px; }
+  .steps span { flex: 1; height: 4px; background: #253240; border-radius: 2px; }
+  .steps span.done { background: var(--friendly); }
+  .steps span.ok { background: var(--neutral); }
+  .steps span.bad { background: var(--hostile); }
+  .st { font: 600 11px var(--mono); }
+  #events { font: 11.5px var(--mono); }
+  .ev { padding: 3px 0; display: grid; grid-template-columns: 70px 1fr; gap: 6px; }
+  .ev time { color: var(--dim); }
+  .ev.override { color: var(--suspicious); }
+  .ev.decision { color: #bf5af2; }
+  .ev.task { color: #64d2ff; }
+  .ev.object { color: var(--dim); }
+  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .muted { color: var(--dim); font-size: 12px; }
+  .leaflet-container { font: inherit; background: #0d1117; }
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.75) contrast(.9) saturate(.35); }
+  .leaflet-tooltip.lbl { background: rgba(11,15,20,.85); color: var(--text); border: 1px solid var(--line);
+    font: 11px var(--mono); padding: 2px 6px; box-shadow: none; }
+  .leaflet-tooltip.lbl::before { display: none; }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel); color: var(--text); }
+  .leaflet-popup-content { font: 12px var(--mono); margin: 10px 12px; }
+  .hz { font-size: 20px; line-height: 20px; text-shadow: 0 0 3px #000; }
+  @media (max-width: 800px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: 44px 55vh auto; height: auto; }
+    aside { border-left: 0; }
+    header { padding: 0 16px; gap: 8px; }
+    #clock { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <b>MDTI</b>
+    <span class="badge sim">OFFLINE SANDBOX · SIMULATED LATTICE · NOT REAL DATA</span>
+    <span id="clock"></span>
+  </header>
+  <div id="map"></div>
+  <aside>
+    <section>
+      <h2>View</h2>
+      <div class="views">
+        <button data-view="amba">AMBA</button>
+        <button data-view="plata">Río de la Plata</button>
+        <button data-view="m201">Milla 201</button>
+        <button data-view="all">All</button>
+        <button id="follow" class="on" title="Fly to each new alert">Follow alerts</button>
+      </div>
+    </section>
+    <section>
+      <h2>Alerts</h2>
+      <div id="alerts"><div class="muted">No inconsistencies yet. Each one detected appears here with what made it impossible.</div></div>
+    </section>
+    <section id="tasks-section" hidden>
+      <h2>Tasks</h2>
+      <div id="tasks"></div>
+    </section>
+    <section>
+      <h2>Activity</h2>
+      <div id="events"><div class="muted">Waiting for the pipeline…</div></div>
+    </section>
+    <section>
+      <h2>Legend</h2>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--hostile)"></i>Hostile</span>
+        <span><i class="dot" style="background:var(--suspicious)"></i>Suspicious</span>
+        <span><i class="dot" style="background:var(--neutral)"></i>Neutral</span>
+        <span><i class="dot" style="background:var(--unknown)"></i>Unknown</span>
+        <span><i class="dot" style="background:var(--friendly)"></i>MDTI asset</span>
+        <span>▲ aircraft · ◆ vessel</span>
+      </div>
+      <p class="muted">Detection only: no assets are dispatched. Background traffic is synthetic; Tier-2 answers are recorded responses replayed by a stub, labelled <code>offline-stub</code> in every decision.</p>
+    </section>
+  </aside>
+</div>
+<script>
+"use strict";
+const COLORS = { HOSTILE: "#ff3b30", SUSPICIOUS: "#ff9f0a", NEUTRAL: "#34c759", FRIENDLY: "#0a84ff", UNKNOWN: "#ffd60a", ASSUMED_FRIENDLY: "#0a84ff" };
+const VIEWS = {
+  amba: [[-34.70, -58.55], 9], plata: [[-34.78, -58.15], 10], m201: [[-46.32, -61.0], 10],
+  all: null,
+};
+const STEPS = ["STATUS_SENT", "STATUS_ACK", "STATUS_WILCO", "STATUS_EXECUTING", "DONE"];
+
+const map = L.map("map", { zoomControl: true, worldCopyJump: false }).setView(VIEWS.amba[0], VIEWS.amba[1]);
+// OpenStreetMap standard tiles, darkened in CSS. Without network access the
+// map still works: tracks and layers draw on the plain background.
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 18,
+}).addTo(map);
+
+const layers = new Map();   // id -> {layer, sig}
+let follow = true, lastSeq = 0, firstPoll = true;
+
+function view(name) {
+  if (name === "all") {
+    map.fitBounds([[-47.6, -68.5], [-34.2, -55.5]]);
+  } else {
+    map.flyTo(VIEWS[name][0], VIEWS[name][1], { duration: 1.2 });
+  }
+}
+document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => view(b.dataset.view));
+const fb = document.getElementById("follow");
+fb.onclick = () => { follow = !follow; fb.classList.toggle("on", follow); };
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function trackIcon(e) {
+  const c = e.kind === "asset" ? COLORS.FRIENDLY : (COLORS[e.disp] || COLORS.UNKNOWN);
+  const rot = e.heading ?? 0;
+  const big = e.kind === "asset" || (e.disp !== "NEUTRAL" && e.disp !== "UNKNOWN");
+  const s = big ? 26 : 16;
+  let shape;
+  if (e.kind === "asset") {
+    shape = `<path d="M12 2 L20 20 L12 15 L4 20 Z" fill="${c}" stroke="#fff" stroke-width="1.2"/>`;
+  } else if (e.env === "SURFACE") {
+    shape = `<path d="M12 3 L18 12 L12 21 L6 12 Z" fill="${c}" stroke="#000" stroke-width="1"/>`;
+  } else {
+    shape = `<path d="M12 2 L19 20 L12 16 L5 20 Z" fill="${c}" stroke="#000" stroke-width="1"/>`;
+  }
+  const ring = big && e.kind !== "asset" ? `<circle cx="12" cy="12" r="11" fill="none" stroke="${c}" stroke-width="1.2" opacity=".7"/>` : "";
+  return L.divIcon({
+    className: "", iconSize: [s, s], iconAnchor: [s / 2, s / 2],
+    html: `<svg width="${s}" height="${s}" viewBox="0 0 24 24" style="transform:rotate(${e.env === "SURFACE" ? 0 : rot}deg)">${ring}${shape}</svg>`,
+  });
+}
+
+function popup(e) {
+  const rows = [
+    ["id", e.id], ["disposition", e.disp + (e.overridden ? " (override)" : "")], ["platform", e.platform],
+    ["alt", e.alt_m != null ? Math.round(e.alt_m / 0.3048) + " ft" : null],
+    ["speed", e.speed != null ? Math.round(e.speed / 0.514444) + " kn" : null],
+    ["heading", e.heading != null ? Math.round(e.heading) + "°" : null],
+  ].filter(r => r[1]);
+  return `<b>${esc(e.name)}</b><br>` + rows.map(r => `${r[0]}: ${esc(r[1])}`).join("<br>") +
+    (e.desc ? `<hr style="border-color:#1f2a36">${esc(e.desc)}` : "");
+}
+
+function geoLayer(e) {
+  const color = e.color || "#999";
+  const opt = { color, weight: e.hazard ? 2 : 1.5, fill: false, interactive: true };
+  if (e.shape === "ellipse") return L.circle(e.pts[0], { ...opt, radius: e.radius_m });
+  if (e.shape === "polygon") return L.polygon(e.pts, opt);
+  if (e.shape === "line") return L.polyline(e.pts, { ...opt, dashArray: /dead-reckoned/i.test(e.name) ? "6 6" : null });
+  if (e.shape === "point") {
+    return L.marker(e.pts[0], { icon: L.divIcon({ className: "", iconSize: [20, 20], iconAnchor: [10, 10],
+      html: `<div class="hz" style="color:${color}">⚠</div>` }) });
+  }
+  return null;
+}
+
+function signature(e) {
+  return JSON.stringify([e.lat, e.lon, e.heading, e.disp, e.pts, e.radius_m, e.color, e.name, e.desc, e.overridden]);
+}
+
+function render(state) {
+  const seen = new Set();
+  for (const e of state.entities) {
+    seen.add(e.id);
+    const sig = signature(e);
+    const cur = layers.get(e.id);
+    if (cur && cur.sig === sig) continue;
+    if (e.kind === "geo") {
+      if (cur) map.removeLayer(cur.layer);
+      const l = geoLayer(e);
+      if (!l) continue;
+      l.bindTooltip(esc(e.name), { className: "lbl", sticky: true });
+      if (e.desc) l.bindPopup(popup(e));
+      l.addTo(map);
+      layers.set(e.id, { layer: l, sig });
+      continue;
+    }
+    if (e.lat == null) continue;
+    const important = e.kind === "asset" || (e.disp !== "NEUTRAL" && e.disp !== "UNKNOWN");
+    if (cur && cur.important === important) {
+      cur.layer.setLatLng([e.lat, e.lon]).setIcon(trackIcon(e)).setPopupContent(popup(e));
+      cur.layer.setTooltipContent(esc(e.name));
+      cur.sig = sig;
+      continue;
+    }
+    if (cur) map.removeLayer(cur.layer);
+    const m = L.marker([e.lat, e.lon], { icon: trackIcon(e), zIndexOffset: important ? 1000 : 0 })
+      .bindPopup(popup(e))
+      .bindTooltip(esc(e.name), { className: "lbl", permanent: important, direction: "right", offset: [12, 0] })
+      .addTo(map);
+    layers.set(e.id, { layer: m, sig, important });
+  }
+  for (const [id, cur] of layers) {
+    if (!seen.has(id)) { map.removeLayer(cur.layer); layers.delete(id); }
+  }
+
+  // Alerts: one hazard point per confirmed inconsistency (name = evidence · disposition).
+  const alerts = state.entities.filter(e => e.id.startsWith("mdti-alert-") && !e.id.startsWith("mdti-alert-area-") && e.pts);
+  if (alerts.length) {
+    const box = document.getElementById("alerts");
+    box.innerHTML = alerts.map(a => {
+      const parts = a.name.split(" · ");
+      const disp = parts.length > 1 ? parts.pop() : "";
+      const title = parts.shift();
+      const color = COLORS[disp] || COLORS.SUSPICIOUS;
+      return `<div class="alert" data-lat="${a.pts[0][0]}" data-lon="${a.pts[0][1]}">
+        <div class="h" style="color:${color}">${esc(title)}</div>
+        <div class="d">${esc(parts.join(" · "))}</div>
+        <div class="d" style="color:${color}">${esc(disp)}</div></div>`;
+    }).join("");
+    box.querySelectorAll(".alert").forEach(el => el.onclick = () => map.flyTo([+el.dataset.lat, +el.dataset.lon], 10, { duration: 1.2 }));
+  }
+
+  // Tasks (only when C2 dispatches; the demo runs detection only)
+  const tasks = document.getElementById("tasks");
+  document.getElementById("tasks-section").hidden = !state.tasks.length;
+  if (state.tasks.length) {
+    tasks.innerHTML = state.tasks.map(t => {
+      const terminal = t.status.startsWith("STATUS_DONE");
+      const idx = terminal ? 4 : STEPS.indexOf(t.status);
+      const cls = i => i > idx ? "" : (i === 4 ? (t.status === "STATUS_DONE_OK" ? "ok" : "bad") : "done");
+      const stColor = t.status === "STATUS_DONE_OK" ? "var(--neutral)" : t.status === "STATUS_DONE_NOT_OK" ? "var(--hostile)" : "#64d2ff";
+      return `<div class="task"><div class="t">${esc(t.name)}</div>
+        <div class="m">${esc(t.assignee.replace("mdti-asset-", "").toUpperCase())} → ${esc(t.target || "point")} · ${esc(t.id.slice(0, 8))}</div>
+        <div class="st" style="color:${stColor}">${esc(t.status)} · v${t.version}${t.error ? " · " + esc(t.error) : ""}</div>
+        <div class="steps">${STEPS.map((_, i) => `<span class="${cls(i)}"></span>`).join("")}</div></div>`;
+    }).join("");
+  }
+
+  // Activity (newest first) and follow-the-alert
+  const evs = state.events.filter(e => e.kind !== "object");
+  if (evs.length) {
+    document.getElementById("events").innerHTML = evs.slice(-60).reverse().map(e =>
+      `<div class="ev ${e.kind}"><time>${e.at.slice(11, 19)}Z</time><span>${esc(e.text)}</span></div>`).join("");
+  }
+  const fresh = state.events.filter(e => e.seq > lastSeq);
+  if (state.events.length) lastSeq = state.events[state.events.length - 1].seq;
+  if (follow && !firstPoll) {
+    const alert = fresh.reverse().find(e => e.kind === "override" && e.entity && !/removed/.test(e.text));
+    const ent = alert && state.entities.find(x => x.id === alert.entity);
+    if (ent && ent.lat != null) map.flyTo([ent.lat, ent.lon], 10, { duration: 1.5 });
+  }
+  firstPoll = false;
+  document.getElementById("clock").textContent = new Date(state.now).toISOString().slice(11, 19) + "Z";
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/sim/state", { cache: "no-store" });
+    if (r.ok) render(await r.json());
+  } catch (e) { /* sandbox restarting */ }
+  setTimeout(poll, 1000);
+}
+poll();
+</script>
+</body>
+</html>
