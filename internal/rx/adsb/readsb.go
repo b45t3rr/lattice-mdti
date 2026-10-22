@@ -21,7 +21,7 @@ import (
 // snapshot is the readsb JSON envelope. adsb.fi v3 and adsb.lol v2 use "ac";
 // older endpoints use "aircraft".
 type snapshot struct {
-	Now      float64    `json:"now"` // epoch milliseconds
+	Now      float64    `json:"now"` // epoch ms (aggregators) or s (local aircraft.json)
 	AC       []aircraft `json:"ac"`
 	Aircraft []aircraft `json:"aircraft"`
 }
@@ -63,8 +63,11 @@ func Parse(body []byte, source domain.Source, receivedAt time.Time) ([]domain.Fr
 		list = s.Aircraft
 	}
 	ref := receivedAt
-	if s.Now > 0 {
+	switch {
+	case s.Now > 1e11: // aggregator APIs: milliseconds
 		ref = time.UnixMilli(int64(s.Now))
+	case s.Now > 0: // a receiver's own aircraft.json: seconds (with fraction)
+		ref = time.UnixMilli(int64(s.Now * 1000))
 	}
 	frames := make([]domain.Frame, 0, len(list))
 	for _, a := range list {

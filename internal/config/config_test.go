@@ -74,6 +74,19 @@ func TestLoadCollectsAllErrors(t *testing.T) {
 	}
 }
 
+func TestOfflineEndpoint(t *testing.T) {
+	for _, ok := range []string{"http://127.0.0.1:8740", "http://localhost:8740", "http://[::1]:8740"} {
+		t.Setenv("LATTICE_ENDPOINT", ok)
+		_, err := Load("")
+		assert.NoError(t, err, ok)
+	}
+	for _, bad := range []string{"http://10.1.2.3:8740", "http://x.example.com"} {
+		t.Setenv("LATTICE_ENDPOINT", bad)
+		_, err := Load("")
+		assert.ErrorContains(t, err, "LATTICE_ENDPOINT", bad)
+	}
+}
+
 func TestRequireListsNamesOnly(t *testing.T) {
 	t.Setenv("MDTI_TEST_SET", "value-should-not-leak")
 	t.Setenv("MDTI_TEST_EMPTY", " ")

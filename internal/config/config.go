@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -36,7 +38,7 @@ func redacted(s Secret) string {
 }
 
 type Lattice struct {
-	Endpoint         string // hostname only, no scheme
+	Endpoint         string // hostname (HTTPS), or http://127.0.0.1:port for the offline sandbox
 	EnvironmentToken Secret
 	SandboxesToken   Secret
 	ClientID         string
@@ -71,7 +73,9 @@ type Config struct {
 	ADSB             ADSB
 	AIS              AIS
 	RedTeamSeed      int64
+	Sources          string // SOURCES: default source list for mdti (docs/SOURCES.md)
 	Tier1Cooldown    time.Duration
+	Tier1DarkMinGap  time.Duration // demo profile shortens it; SPEC default 10 min
 	Tier2Concurrency int
 	Tier2PerMinute   int
 	LogLevel         slog.Level
@@ -115,14 +119,16 @@ func Load(envFile string) (*Config, error) {
 			IdleTimeout: p.dur("AIS_IDLE_TIMEOUT", 120*time.Second),
 		},
 		RedTeamSeed:      int64(p.int("REDTEAM_SEED", 42)),
+		Sources:          p.str("SOURCES", "adsb,ais"),
 		Tier1Cooldown:    p.dur("TIER1_COOLDOWN", 120*time.Second),
+		Tier1DarkMinGap:  p.dur("TIER1_DARK_MIN_GAP", 10*time.Minute),
 		Tier2Concurrency: p.int("TIER2_CONCURRENCY", 2),
 		Tier2PerMinute:   p.int("TIER2_MAX_CALLS_PER_MIN", 10),
 		LogLevel:         p.level("LOG_LEVEL", slog.LevelInfo),
 		LogFormat:        p.str("LOG_FORMAT", "text"),
 	}
-	if strings.Contains(c.Lattice.Endpoint, "://") {
-		p.errs = append(p.errs, errors.New("LATTICE_ENDPOINT must be a hostname without scheme"))
+	if strings.Contains(c.Lattice.Endpoint, "://") && !offlineEndpoint(c.Lattice.Endpoint) {
+		p.errs = append(p.errs, errors.New("LATTICE_ENDPOINT must be a hostname without scheme (or http://127.0.0.1:<port> for the offline sandbox)"))
 	}
 	switch c.Autonomy {
 	case "advisory", "supervised", "autonomous":
@@ -238,4 +244,14 @@ func (p *parser) level(k string, def slog.Level) slog.Level {
 		return def
 	}
 	return l
+}
+
+// offlineEndpoint accepts http://<loopback>[:port], the offline sandbox.
+func offlineEndpoint(endpoint string) bool {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	ip := net.ParseIP(u.Hostname())
+	return u.Hostname() == "localhost" || (ip != nil && ip.IsLoopback())
 }

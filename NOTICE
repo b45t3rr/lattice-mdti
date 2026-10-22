@@ -37,3 +37,10 @@ Anduril Lattice
 
 OpenAI
   Tier-2 decisions call the OpenAI API under the user's own account and terms.
+
+Third-party Go modules (bundled into binaries)
+  github.com/BertoldVdb/go-ais — AIS message codec. MIT License,
+  Copyright (c) 2019 Bertold Van den Bergh.
+  github.com/adrianmo/go-nmea — NMEA 0183 parser. MIT License,
+  Copyright (c) 2015 Adrian Moreno.
+  Other dependencies are listed in go.mod under their own licenses.

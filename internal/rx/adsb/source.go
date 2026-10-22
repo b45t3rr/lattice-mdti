@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -49,6 +50,7 @@ var Providers = map[string]Provider{
 // HTTPSource polls a provider and emits only new position reports.
 type HTTPSource struct {
 	Provider  Provider
+	URL       string // fixed URL (local receiver); overrides Provider.URLTemplate
 	CenterLat float64
 	CenterLon float64
 	RadiusNM  float64
@@ -81,9 +83,32 @@ func NewHTTPSource(provider string, lat, lon, radiusNM float64, interval time.Du
 	}, nil
 }
 
+// NewLocalSource polls a local receiver's aircraft.json (readsb, dump1090-fa,
+// tar1090). base may be the receiver's web root ("http://192.168.1.50:8080",
+// "/data/aircraft.json" is appended) or the full file URL.
+func NewLocalSource(base string, interval time.Duration, log *slog.Logger) (*HTTPSource, error) {
+	u, err := url.Parse(base)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, fmt.Errorf("readsb: %q is not an http(s) URL", base)
+	}
+	if u.Path == "" || u.Path == "/" {
+		u.Path = "/data/aircraft.json"
+	}
+	interval = max(interval, time.Second)
+	return &HTTPSource{
+		Provider: Provider{Name: domain.SourceReadsb, MinInterval: time.Second}, URL: u.String(), Interval: interval,
+		Client:    &http.Client{Timeout: 5 * time.Second},
+		Log:       log.With("module", "rx", "source", string(domain.SourceReadsb)),
+		UserAgent: "lattice-mdti (+https://github.com/b45t3rr/lattice-mdti)",
+	}, nil
+}
+
 func (s *HTTPSource) Name() string { return string(s.Provider.Name) }
 
 func (s *HTTPSource) url() string {
+	if s.URL != "" {
+		return s.URL
+	}
 	return fmt.Sprintf(s.Provider.URLTemplate, s.CenterLat, s.CenterLon, s.RadiusNM)
 }
 

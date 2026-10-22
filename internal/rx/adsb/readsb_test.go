@@ -154,3 +154,43 @@ func TestNewHTTPSourceClampsInterval(t *testing.T) {
 	_, err = NewHTTPSource("nope", 0, 0, 1, time.Second, slog.New(slog.DiscardHandler))
 	assert.Error(t, err)
 }
+
+// A receiver's own aircraft.json reports "now" in seconds, with a fraction.
+func TestParseLocalAircraftJSONSeconds(t *testing.T) {
+	body := []byte(`{"now": 1792611702.5, "messages": 1234, "aircraft": [{"hex":"e3f00d","lat":-34.6,"lon":-58.6,"seen_pos":0.5,"alt_baro":5000}]}`)
+	frames, err := Parse(body, domain.SourceReadsb, time.Now())
+	require.NoError(t, err)
+	require.Len(t, frames, 1)
+	assert.Equal(t, time.UnixMilli(1792611702500-500), frames[0].ObservedAt)
+	assert.Equal(t, domain.SourceReadsb, frames[0].Source)
+}
+
+func TestLocalSourcePollsAircraftJSON(t *testing.T) {
+	var path atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path.Store(r.URL.Path)
+		fmt.Fprintf(w, `{"now":%.3f,"aircraft":[{"hex":"e1724f","lat":-34.6,"lon":-59.4,"seen_pos":0.1,"alt_baro":10000}]}`,
+			float64(time.Now().UnixMilli())/1000)
+	}))
+	defer srv.Close()
+	s, err := NewLocalSource(srv.URL, time.Second, slog.New(slog.DiscardHandler))
+	require.NoError(t, err)
+	assert.Equal(t, "readsb", s.Name())
+	out := make(chan domain.Frame, 4)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	go func() { _ = s.Run(ctx, out) }()
+	select {
+	case f := <-out:
+		assert.Equal(t, "adsb:e1724f", f.EntityKey)
+	case <-ctx.Done():
+		t.Fatal("no frame from the local receiver")
+	}
+	assert.Equal(t, "/data/aircraft.json", path.Load())
+
+	_, err = NewLocalSource("192.168.1.50:8080", time.Second, slog.New(slog.DiscardHandler))
+	assert.Error(t, err, "a scheme is required")
+	s, err = NewLocalSource("http://pi.local/tar1090/data/aircraft.json", time.Second, slog.New(slog.DiscardHandler))
+	require.NoError(t, err)
+	assert.Equal(t, "http://pi.local/tar1090/data/aircraft.json", s.URL)
+}

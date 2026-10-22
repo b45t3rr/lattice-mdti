@@ -29,6 +29,10 @@ const (
 	SourceAISStream Source = "aisstream"
 	SourceRedTeam   Source = "redteam"
 	SourceReplay    Source = "replay"
+	SourceSynthetic Source = "synthetic" // offline demo background traffic
+	SourceNMEA      Source = "nmea"      // local AIS receiver (NMEA 0183 !AIVDM)
+	SourceSBS       Source = "sbs"       // local ADS-B receiver (BaseStation port 30003)
+	SourceReadsb    Source = "readsb"    // local ADS-B receiver (readsb/dump1090 aircraft.json)
 )
 
 // Frame is one normalized telemetry sample (SPEC §3.1).

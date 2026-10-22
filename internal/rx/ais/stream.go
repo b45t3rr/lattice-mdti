@@ -61,7 +61,7 @@ func (s *Stream) Run(ctx context.Context, out chan<- domain.Frame) error {
 		return errors.New("AISSTREAM_API_KEY is not set")
 	}
 	if s.static == nil {
-		s.static = newStaticCache(50_000, 24*time.Hour)
+		s.static = newStaticCache(staticMax, staticTTL)
 	}
 	backoff := time.Duration(0)
 	for {

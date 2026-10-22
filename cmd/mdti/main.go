@@ -37,8 +37,12 @@ import (
 	"github.com/b45t3rr/lattice-mdti/internal/rx/bus"
 	"github.com/b45t3rr/lattice-mdti/internal/rx/redteam"
 	"github.com/b45t3rr/lattice-mdti/internal/rx/replay"
+	"github.com/b45t3rr/lattice-mdti/internal/rx/sbs"
+	rxsources "github.com/b45t3rr/lattice-mdti/internal/rx/sources"
+	"github.com/b45t3rr/lattice-mdti/internal/rx/synth"
 	"github.com/b45t3rr/lattice-mdti/internal/tier1"
 	"github.com/b45t3rr/lattice-mdti/internal/tier2"
+	"github.com/b45t3rr/lattice-mdti/internal/viz"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 )
@@ -56,13 +60,15 @@ type flags struct {
 	duration    time.Duration
 	anomalies   string
 	decisions   string
+	overlays    bool
+	tasking     bool
 }
 
 func main() {
 	var f flags
 	flag.StringVar(&f.envFile, "env", ".env", "optional .env file (existing environment wins)")
 	flag.StringVar(&f.modules, "modules", "rx,ing,tier1,tier2", "comma-separated modules to run: rx, ing, tier1, tier2")
-	flag.StringVar(&f.sources, "sources", "adsb,ais", "live sources: adsb, ais (empty = none)")
+	flag.StringVar(&f.sources, "sources", "", "comma-separated sources (default: $SOURCES, else adsb,ais): adsb, aisstream, synthetic, readsb:<url>, sbs:<host:port>, nmea-udp:<addr>, nmea-tcp:<host:port>; see docs/SOURCES.md")
 	flag.BoolVar(&f.dryRun, "dry-run", false, "print every frame to stdout")
 	flag.StringVar(&f.record, "record", "", "record every frame to this JSONL file")
 	flag.StringVar(&f.replayFile, "replay", "", "replay this JSONL file instead of live sources")
@@ -72,6 +78,8 @@ func main() {
 	flag.DurationVar(&f.duration, "duration", 0, "stop after this long (0 = until interrupted)")
 	flag.StringVar(&f.anomalies, "anomalies", "", "write Tier-1 anomalies to this JSONL file")
 	flag.StringVar(&f.decisions, "decisions", "", "write Tier-2 decisions to this JSONL file")
+	flag.BoolVar(&f.tasking, "tasking", true, "let C2 dispatch ISR tasks to patrol assets (false = detection only: classify, mark and draw evidence)")
+	flag.BoolVar(&f.overlays, "overlays", true, "draw MDTI's background map layers (zones, coverage, 200 NM limit) in Lattice")
 	flag.Parse()
 
 	if err := run(f); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
@@ -86,6 +94,11 @@ func run(f flags) error {
 		return err
 	}
 	log := newLogger(cfg)
+	sourcesSet := false
+	flag.Visit(func(fl *flag.Flag) { sourcesSet = sourcesSet || fl.Name == "sources" })
+	if !sourcesSet {
+		f.sources = cfg.Sources
+	}
 
 	modules := map[string]bool{}
 	for _, m := range split(f.modules) {
@@ -154,9 +167,13 @@ func run(f flags) error {
 		tc.CoverageCenter = geo.Point{Lat: cfg.ADSB.CenterLat, Lon: cfg.ADSB.CenterLon}
 		tc.CoverageRadiusNM = cfg.ADSB.RadiusNM
 		tc.Cooldown = cfg.Tier1Cooldown
+		tc.DarkMinGap = cfg.Tier1DarkMinGap
 		t1 = tier1.New(tc, zones, aerodromes)
 		t1Sub = b.Subscribe("tier1", 8192)
-		log.Info("Tier 1 enabled", "zones", len(zones.Zones), "ghost_refs", tc.GhostRefs)
+		log.Info("Tier 1 enabled", "zones", len(zones.Zones), "ghost_refs", tc.GhostRefs, "dark_min_gap", tc.DarkMinGap)
+		if tc.DarkMinGap < 10*time.Minute {
+			log.Warn("DEMO PROFILE: dark-vessel silence threshold shortened", "dark_min_gap", tc.DarkMinGap, "spec_default", 10*time.Minute)
+		}
 	}
 	var hijack *bus.Subscription
 	scenarios, err := loadScenarios(f.redteam)
@@ -191,26 +208,64 @@ func run(f flags) error {
 		p := &replay.Player{Frames: frames, Speed: f.replaySpeed, Rebase: f.replaySpeed > 0}
 		sources = append(sources, func() error { return p.Run(ctx, b.In()) })
 	} else {
-		for _, s := range split(f.sources) {
-			switch s {
-			case "adsb":
-				src, err := adsb.NewHTTPSource(cfg.ADSB.Source, cfg.ADSB.CenterLat, cfg.ADSB.CenterLon, cfg.ADSB.RadiusNM, cfg.ADSB.PollInterval, log)
+		specs, err := rxsources.Parse(f.sources)
+		if err != nil {
+			return err
+		}
+		for _, sp := range specs {
+			var src interface {
+				Run(context.Context, chan<- domain.Frame) error
+			}
+			switch sp.Kind {
+			case rxsources.ADSB:
+				hs, err := adsb.NewHTTPSource(cfg.ADSB.Source, cfg.ADSB.CenterLat, cfg.ADSB.CenterLon, cfg.ADSB.RadiusNM, cfg.ADSB.PollInterval, log)
 				if err != nil {
 					return err
 				}
-				log.Info("ADS-B source", "provider", src.Name(), "center", fmt.Sprintf("%.4f,%.4f", cfg.ADSB.CenterLat, cfg.ADSB.CenterLon),
-					"radius_nm", cfg.ADSB.RadiusNM, "interval", src.Interval)
-				sources = append(sources, func() error { return src.Run(ctx, b.In()) })
-			case "ais":
+				log.Info("ADS-B source", "provider", hs.Name(), "center", fmt.Sprintf("%.4f,%.4f", cfg.ADSB.CenterLat, cfg.ADSB.CenterLon),
+					"radius_nm", cfg.ADSB.RadiusNM, "interval", hs.Interval)
+				src = hs
+			case rxsources.AISStream:
 				if cfg.AIS.APIKey.Reveal() == "" {
 					log.Warn("AISSTREAM_API_KEY not set; AIS source disabled")
 					continue
 				}
-				st := ais.NewStream(cfg.AIS.APIKey, cfg.AIS.BBox, cfg.AIS.IdleTimeout, log)
-				sources = append(sources, func() error { return st.Run(ctx, b.In()) })
-			default:
-				return fmt.Errorf("unknown source %q", s)
+				src = ais.NewStream(cfg.AIS.APIKey, cfg.AIS.BBox, cfg.AIS.IdleTimeout, log)
+			case rxsources.Synthetic:
+				aero, err := geo.LoadAerodromes("data/geo/aerodromes.json")
+				if err != nil {
+					return err
+				}
+				tr := &synth.Traffic{Center: geo.Point{Lat: cfg.ADSB.CenterLat, Lon: cfg.ADSB.CenterLon}, RadiusNM: cfg.ADSB.RadiusNM,
+					Aircraft: 14, Seed: uint64(cfg.RedTeamSeed), Avoid: []geo.Point{aero["SADM"].Point()}, AvoidNM: 20}
+				log.Info("synthetic background traffic (offline demo)", "aircraft", tr.Aircraft, "radius_nm", tr.RadiusNM)
+				src = tr
+			case rxsources.Readsb:
+				ls, err := adsb.NewLocalSource(sp.Arg, cfg.ADSB.PollInterval, log)
+				if err != nil {
+					return err
+				}
+				log.Info("local ADS-B receiver (aircraft.json)", "url", ls.URL, "interval", ls.Interval)
+				src = ls
+			case rxsources.SBS:
+				ss, err := sbs.New(sp.Arg, log.With("module", "rx", "source", "sbs"))
+				if err != nil {
+					return err
+				}
+				src = ss
+			case rxsources.NMEAUDP, rxsources.NMEATCP:
+				network := "udp"
+				if sp.Kind == rxsources.NMEATCP {
+					network = "tcp"
+				}
+				ns, err := ais.NewNMEA(network, sp.Arg, log.With("module", "rx", "source", "nmea"))
+				if err != nil {
+					return err
+				}
+				src = ns
 			}
+			log.Info("source enabled", "source", sp.String())
+			sources = append(sources, func() error { return src.Run(ctx, b.In()) })
 		}
 	}
 
@@ -258,11 +313,12 @@ func run(f flags) error {
 			var ctrl *c2.Controller
 			if clients != nil {
 				ctrl = &c2.Controller{Entities: clients.Unary.Entities, Tasks: clients.Unary.Tasks, Assets: t2.Policy.Assets,
-					Integration: cfg.Lattice.IntegrationName, Log: log.With("module", "c2")}
+					Integration: cfg.Lattice.IntegrationName, Log: log.With("module", "c2"), DetectionOnly: !f.tasking}
 				if engine != nil {
 					ctrl.ING = engine
 				}
-				log.Info("C2 enabled", "assets", len(t2.Policy.Assets), "autonomy", cfg.Autonomy)
+				log.Info("C2 enabled", "assets", len(t2.Policy.Assets), "autonomy", cfg.Autonomy, "tasking", f.tasking)
+				start("c2-markers", func() error { ctrl.Run(ctx); return nil })
 			}
 			t2In = make(chan domain.AnomalyEvent, 256)
 			results := make(chan tier2.Result, 64)
@@ -270,6 +326,9 @@ func run(f flags) error {
 			start("decision-sink", func() error { return sinkDecisions(ctx, results, clients, ctrl, f.decisions, log) })
 		}
 		start("anomaly-sink", func() error { return sinkAnomalies(ctx, anomalies, f.anomalies, t2In) })
+	}
+	if clients != nil && f.overlays {
+		start("overlays", func() error { publishOverlays(ctx, cfg, clients, log); return nil })
 	}
 	if engine != nil {
 		// The publisher outlives the engine so the final flush still reaches Lattice.
@@ -417,7 +476,8 @@ func sinkDecisions(ctx context.Context, in <-chan tier2.Result, clients *lattice
 			if ctrl != nil {
 				outcome = ctrl.Handle(ctx, d, r.Event, evPath)
 				log.Info("c2", "entity", d.EntityID, "overridden", outcome.Overridden, "annotated", outcome.Annotated,
-					"dead_reckoning", outcome.DeadReckoned, "task", outcome.TaskID, "asset", outcome.Asset, "skipped", outcome.Skipped)
+					"dead_reckoning", outcome.DeadReckoned, "task", outcome.TaskID, "asset", outcome.Asset, "skipped", outcome.Skipped,
+					"evidence", outcome.Evidence)
 			}
 			if enc != nil {
 				if err := enc.Encode(struct {
@@ -428,6 +488,38 @@ func sinkDecisions(ctx context.Context, in <-chan tier2.Result, clients *lattice
 					return err
 				}
 			}
+		}
+	}
+}
+
+// publishOverlays keeps MDTI's static map layers alive in Lattice while the
+// daemon runs; they expire a few minutes after it stops.
+func publishOverlays(ctx context.Context, cfg *config.Config, c *lattice.Clients, log *slog.Logger) {
+	zones, err := geo.LoadZones("data/geo/zones.yaml")
+	if err != nil {
+		log.Warn("overlays disabled", "err", err)
+		return
+	}
+	aerodromes, err := geo.LoadAerodromes("data/geo/aerodromes.json")
+	if err != nil {
+		log.Warn("overlays disabled", "err", err)
+		return
+	}
+	layers := viz.Overlays(zones, aerodromes, geo.Point{Lat: cfg.ADSB.CenterLat, Lon: cfg.ADSB.CenterLon}, cfg.ADSB.RadiusNM,
+		tier1.DefaultConfig().GhostRadiusNM)
+	tick := time.NewTicker(time.Minute)
+	defer tick.Stop()
+	for {
+		now := time.Now().UTC()
+		for _, l := range layers {
+			if _, err := c.Unary.Entities.PublishEntity(ctx, l.Entity(cfg.Lattice.IntegrationName, now, now.Add(3*time.Minute))); err != nil && ctx.Err() == nil {
+				log.Warn("overlay publish failed", "layer", l.ID, "err", lattice.Describe(err))
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
 		}
 	}
 }
