@@ -4,7 +4,10 @@ bin/
 *.exe
 *.test
 *.out
-coverage.*
+# Go coverage reports (root only: internal/tier1/coverage.go is source)
+/coverage.out
+/coverage.html
+*.coverprofile
 !testdata/**/*.jsonl
 # Local tooling configuration (not part of the project)
 .claude/
