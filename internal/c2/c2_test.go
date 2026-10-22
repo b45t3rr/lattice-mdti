@@ -68,12 +68,14 @@ func (f *fakeLattice) GetTask(_ context.Context, r *Lattice.GetTaskRequest, _ ..
 
 type fakeING struct {
 	classified []string
+	activity   []string
 	disp       []Lattice.MilViewDisposition
 	dr         []string
 }
 
-func (f *fakeING) Classify(id string, d Lattice.MilViewDisposition, note string) {
+func (f *fakeING) Classify(id string, d Lattice.MilViewDisposition, note, activity string) {
 	f.classified = append(f.classified, id+"|"+note)
+	f.activity = append(f.activity, activity)
 	f.disp = append(f.disp, d)
 }
 func (f *fakeING) StartDeadReckoning(id string) { f.dr = append(f.dr, id) }
@@ -203,6 +205,9 @@ func TestAlertMarkerAndOutcome(t *testing.T) {
 	out := c.Handle(context.Background(), d, ev, "")
 	require.Len(t, f.published, 3, "alert area + hazard point + first-fix evidence")
 	assert.Contains(t, out.Evidence, "GHOST TRACK · first seen", "the outcome carries the headline for logs")
+	ing := c.ING.(*fakeING)
+	require.NotEmpty(t, ing.activity)
+	assert.Equal(t, out.Evidence, ing.activity[len(ing.activity)-1], "ING shows the same headline in the track panel")
 	assert.Equal(t, "mdti-alert-area-mdti-adsb-e3f00d", *f.published[0].EntityID)
 	assert.Contains(t, *f.published[1].Aliases.Name, "GHOST TRACK · first seen")
 	assert.Contains(t, *f.published[1].Aliases.Name, "· HOSTILE")

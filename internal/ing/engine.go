@@ -40,6 +40,7 @@ type classification struct {
 	entityID string
 	disp     Lattice.MilViewDisposition // "" keeps the published symbology
 	note     string
+	activity string // evidence headline, shown as "Activity" in the C2 track panel
 }
 
 type track struct {
@@ -80,8 +81,8 @@ func (e *Engine) StopDeadReckoning(entityID string) { e.drReq <- drRequest{entit
 // Classify records C2's verdict: the SIDC affiliation follows disp and the
 // description is prefixed with note on every subsequent publish (and one is
 // published immediately). Safe from any goroutine.
-func (e *Engine) Classify(entityID string, disp Lattice.MilViewDisposition, note string) {
-	e.classReq <- classification{entityID: entityID, disp: disp, note: note}
+func (e *Engine) Classify(entityID string, disp Lattice.MilViewDisposition, note, activity string) {
+	e.classReq <- classification{entityID: entityID, disp: disp, note: note, activity: activity}
 }
 
 // Run consumes frames until in is closed or ctx is cancelled.
@@ -162,6 +163,11 @@ func (e *Engine) overlay(ent *Lattice.Entity, t *track) *Lattice.Entity {
 			desc += " · " + *ent.Description
 		}
 		ent.Description = Lattice.String(truncateRunes(desc, 1024))
+	}
+	// The C2 track panel shows Status.PlatformActivity ("Activity"), but not
+	// the description (verified with cmd/validate panel-probe, 2026-10-22).
+	if t.class.activity != "" {
+		ent.Status = &Lattice.Status{PlatformActivity: Lattice.String(truncateRunes(t.class.activity, 160))}
 	}
 	return ent
 }

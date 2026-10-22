@@ -1251,9 +1251,21 @@ annotate the track and draw the evidence, but no task is created (`skipped="dete
 The demo always runs this way. 200 NM lines are labelled by Marine Regions `line_id`: the primary
 line (the first configured) is cyan, and the others (disputed claims) are orange.
 
-**Verified live (2026-10-22, new Sandbox):** all four demo acts were reclassified with their alert,
-headline and evidence layers, and read back with `cmd/validate get`. The C2 renders the jump line
-and the hazard points.
+**Track panel.** `cmd/validate panel-probe` published one probe track per candidate field. The
+C2 track panel shows only two of them:
+
+| Field | Shown in the C2? | MDTI use |
+|---|---|---|
+| `Status.PlatformActivity` | yes, as **Activity** in the track panel | the evidence headline (ING overlay, from `c2.Evidence`) |
+| `Indicators.Simulated` | yes, a **Simulated** badge in the panel and track list, plus an "S" on the map | red-team and synthetic tracks (`ing.Mapper`) |
+| `TargetPriority` (threat, HVT) | yes, a red "HVT/HPT" map label | **not used**: targeting semantics, out of scope |
+| `description`, `Status.Role`, `Media`, `Health.ActiveAlerts`, `VisualDetails.RangeRings` | no | not used |
+
+**Verified live (2026-10-22, new Sandbox), checked in the C2 UI:**
+- **Track panels:** each of the four acts shows its disposition, the Simulated badge, the evidence
+  headline under Activity, and the override under Data Overrides (Disposition → Hostile/Suspect).
+- **Map:** shows the jump line, the alert rings and hazard points, the first-fix marker, and the
+  cyan 200 NM line at the Milla 201.
 
 ### 8.2 Asset selection
 

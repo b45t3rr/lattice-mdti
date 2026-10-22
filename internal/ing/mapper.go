@@ -94,6 +94,11 @@ func (m *Mapper) Entity(f domain.Frame, createdAt time.Time) *Lattice.Entity {
 	if specific != "" {
 		e.Ontology.SpecificType = Lattice.String(specific)
 	}
+	// Injected and synthetic tracks are labelled as simulated in the C2
+	// ("S" badge, "Simulated" in the tooltip). Tier 1/2 never see the origin.
+	if f.Source == domain.SourceRedTeam || f.Source == domain.SourceSynthetic {
+		e.Indicators = &Lattice.Indicators{Simulated: Lattice.Bool(true)}
+	}
 	if f.Domain == domain.DomainAir {
 		e.TransponderCodes = transponder(f)
 	} else {

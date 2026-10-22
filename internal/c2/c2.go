@@ -44,7 +44,7 @@ type TaskAPI interface {
 
 // Annotator is ING: it owns the entities and carries what cannot be overridden.
 type Annotator interface {
-	Classify(entityID string, disp Lattice.MilViewDisposition, note string)
+	Classify(entityID string, disp Lattice.MilViewDisposition, note, activity string)
 	StartDeadReckoning(entityID string)
 }
 
@@ -119,7 +119,11 @@ func (c *Controller) Handle(ctx context.Context, d domain.TacticalDecision, ev d
 		}
 	}
 	if c.ING != nil && (d.Action.Disposition != "" || d.Disposition != "" || d.AnomalyConfirmed) {
-		c.ING.Classify(d.EntityID, disp, note)
+		activity := ""
+		if d.AnomalyConfirmed {
+			activity, _ = Evidence(ev)
+		}
+		c.ING.Classify(d.EntityID, disp, note, activity)
 		out.Annotated = true
 	}
 	if c.ING != nil && d.AnomalyConfirmed && ev.Type == domain.AnomalyAISDarkEEZ {

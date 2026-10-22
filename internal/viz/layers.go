@@ -18,6 +18,13 @@ import (
 // hazard points render as an icon. Sensor fields of view, ActiveTarget
 // relationships and points of interest with media do not render, so MDTI
 // draws sensor rings and intercept lines as geo entities instead.
+//
+// Track panel (cmd/validate panel-probe, 2026-10-22): Status.PlatformActivity
+// is shown as "Activity" (MDTI puts the evidence headline there) and
+// Indicators.Simulated as a "Simulated" badge. Description, Status.Role,
+// Media, Health.ActiveAlerts and VisualDetails.RangeRings are not shown.
+// TargetPriority renders an "HVT/HPT" label: deliberately unused, targeting
+// semantics are outside MDTI's defensive scope.
 
 // Overlays are the static background layers of the MDTI picture.
 func Overlays(zones *geo.ZoneSet, aerodromes geo.Aerodromes, coverageCenter geo.Point, coverageNM float64, ghostNM float64) []Layer {

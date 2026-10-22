@@ -8,6 +8,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	Lattice "github.com/anduril/lattice-sdk-go/v5"
@@ -42,10 +43,15 @@ func panelProbe(ctx context.Context, c *lattice.Clients, args []string) error {
 	imgPath := "mdti/media/probe-chart.png"
 	chart := viz.LineChart("GNSS vs baro altitude (ft)", "last 60 s", "ft", []viz.Series{
 		{Name: "baro", Color: viz.Cyan, Y: baro}, {Name: "GNSS", Color: viz.Red, Y: gnss}})
-	if _, err := c.Unary.Objects.UploadObject(ctx, imgPath, bytes.NewReader(chart)); err != nil {
+	// Objects are immutable: an earlier probe run may already have stored it.
+	switch _, err := c.Unary.Objects.UploadObject(ctx, imgPath, bytes.NewReader(chart)); {
+	case err == nil:
+		fmt.Println("uploaded", imgPath)
+	case strings.Contains(err.Error(), "already exists"):
+		fmt.Println("already stored", imgPath)
+	default:
 		return fmt.Errorf("upload chart: %w", err)
 	}
-	fmt.Println("uploaded", imgPath)
 
 	origin := geo.Point{Lat: -34.42, Lon: -58.98} // NW of Morón, clear of the demo
 	desc := "[MDTI] DESCRIPTION PROBE · IMPOSSIBLE KINEMATICS · 22.2 km in 3 s · 7,443 m/s (Mach 22). " +

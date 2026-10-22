@@ -347,7 +347,8 @@ func TestEngineClassifyOverlay(t *testing.T) {
 	f := liveADSBFrame(t)
 	e.handle(f)
 	p.Flush(context.Background())
-	e.setClass(classification{entityID: "mdti-adsb-e0aa11", disp: Lattice.MilViewDispositionDispositionHostile, note: "[MDTI] GHOST · HOSTILE"})
+	e.setClass(classification{entityID: "mdti-adsb-e0aa11", disp: Lattice.MilViewDispositionDispositionHostile, note: "[MDTI] GHOST · HOSTILE",
+		activity: "GHOST TRACK · first seen 8.0 NM from SADM"})
 	p.Flush(context.Background())
 	require.Equal(t, 2, api.n())
 	ent := api.calls[1]
@@ -356,6 +357,8 @@ func TestEngineClassifyOverlay(t *testing.T) {
 	assert.Equal(t, Lattice.MilViewDispositionDispositionNeutral, *ent.MilView.Disposition,
 		"ING never publishes the verdict as disposition: the C2 override carries it")
 	assert.Equal(t, f.ObservedAt.Add(time.Millisecond), *ent.Provenance.SourceUpdateTime)
+	require.NotNil(t, ent.Status, "the evidence headline goes where the C2 panel shows it")
+	assert.Equal(t, "GHOST TRACK · first seen 8.0 NM from SADM", *ent.Status.PlatformActivity)
 
 	// Subsequent real reports keep the overlay.
 	f2 := f
@@ -365,3 +368,15 @@ func TestEngineClassifyOverlay(t *testing.T) {
 	require.Equal(t, 3, api.n())
 	assert.Equal(t, "SHAPCF---------", *api.calls[2].Symbology.MilStd2525C.Sidc)
 }
+
+func TestSimulatedIndicatorOnlyForInjectedTraffic(t *testing.T) {
+	f := liveADSBFrame(t)
+	assert.Nil(t, mapper().Entity(f, t0).Indicators, "live traffic is not marked")
+	for _, src := range []domain.Source{domain.SourceRedTeam, domain.SourceSynthetic} {
+		f.Source = src
+		e := mapper().Entity(f, t0)
+		require.NotNil(t, e.Indicators, src)
+		assert.True(t, *e.Indicators.Simulated, src)
+	}
+}
+
