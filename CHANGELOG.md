@@ -8,7 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- C2 screenshots from the live demo in the README (`docs/c2/`).
+- C2 screenshots and a 71 s video (`docs/c2/mdti-c2-demo.mp4`) recorded from a live demo run.
 - `make check` (`scripts/check.sh`) runs every pull-request check locally.
 
 ### Removed

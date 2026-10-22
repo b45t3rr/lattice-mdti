@@ -141,8 +141,11 @@ things:
 | ![GPS spoofing: GNSS altitude 1100 ft away from baro](docs/c2/3-gps-spoofing.png) | ![AIS switched off at the 200 NM line](docs/c2/4-ais-off-milla-201.png) |
 | **GPS spoofing** · GNSS +1100 ft from baro, NACp 4 | **AIS off at the Milla 201** · heading into the EEZ, turned 70° |
 
-<sub>In the last capture the alert ring sits on the intercept point; since v1.1.0 it sits on the
-vessel's last report.</sub>
+In the last capture the alert ring sits on the vessel's last AIS report. The orange line is the
+dead-reckoned track to its estimated position.
+
+**Video (71 s):** [`docs/c2/mdti-c2-demo.mp4`](docs/c2/mdti-c2-demo.mp4) shows the four acts in the
+C2 as they happen, recorded from a live run.
 
 ## Verified results
 
