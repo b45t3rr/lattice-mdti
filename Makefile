@@ -1,9 +1,15 @@
 SCENARIOS := scenarios/kinematic.yaml,scenarios/baro_gnss.yaml,scenarios/ghost_sadm.yaml,scenarios/dark_vessel_eez.yaml
 
-.PHONY: build test vet lint vuln rx redteam replay determinism evaluate calibrate agent demo demo-offline sim receiver-sim
+.PHONY: check build test vet lint vuln rx redteam replay determinism evaluate calibrate agent demo demo-offline sim receiver-sim
 
 build:
 	go build -o bin/ ./cmd/... ./tools/...
+
+# Every check a pull request must pass (there is no hosted CI): gofmt, build,
+# vet, staticcheck, tests (-race when cgo is available), govulncheck, recall
+# gates and red-team determinism.
+check:
+	bash scripts/check.sh
 
 test:
 	go test ./...

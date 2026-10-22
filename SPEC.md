@@ -151,7 +151,7 @@ C2 response through Anduril Lattice.
 | `github.com/stretchr/testify` | tests |
 | stdlib `log/slog`, `net/http`, `context`, `math` | everything else |
 
-Tooling: `go test ./...`, `go vet`, `staticcheck` and `govulncheck`, run in CI via the Makefile.
+Tooling: `go test ./...`, `go vet`, `staticcheck` and `govulncheck`, all run by `make check` (`scripts/check.sh`); there is no hosted CI.
 
 ---
 
@@ -993,7 +993,7 @@ clock, advances the clock 30 min past the last frame (so D4 can observe silence)
   matches a truth record when the entity matches, the type is the event type **or** one of its
   corroborating types, and the detection lies in `[t_start − 5 s, t_end + 60 s]`.
 
-Exit status is non-zero when recall falls below `-min-recall` (default 1.0), which makes it usable as a CI gate.
+Exit status is non-zero when recall falls below `-min-recall` (default 1.0), which makes it usable as a gate (`make check`).
 
 ---
 
@@ -1432,7 +1432,7 @@ See [`.env.example`](.env.example). It contains variable names and non-secret de
   and skipped unless `MDTI_LIVE=1`.
 - Untrusted input: all source strings are length-capped and sanitized at RX. WebSocket frames are
   limited to 1 MiB and HTTP bodies to 8 MiB.
-- Supply chain: dependencies are pinned in `go.sum`, `govulncheck` runs in CI, and the dependency set is minimal (§1.1).
+- Supply chain: dependencies are pinned in `go.sum`, `govulncheck` runs in `make check`, and the dependency set is minimal (§1.1).
 
 ### 9.3 Theater bounding box
 

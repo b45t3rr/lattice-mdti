@@ -22,8 +22,7 @@ Requirements: Go ≥ 1.27.3 (the `toolchain` directive downloads it automaticall
 ```sh
 git clone https://github.com/b45t3rr/lattice-mdti && cd lattice-mdti
 go test ./...                 # unit, contract, replay and scenario tests (no network)
-make lint vuln                # go vet + staticcheck, govulncheck
-make evaluate determinism     # Tier-1 recall gate, red-team determinism
+make check                    # everything a pull request must pass (bash scripts/check.sh without make)
 ```
 
 Most work needs no account at all: `make demo-offline` runs the whole pipeline on the offline
@@ -48,8 +47,8 @@ Live checks need a Lattice Sandbox (`LATTICE_ENDPOINT`, `ENVIRONMENT_TOKEN`, `SA
 5. **Tier-2 changes** (brief, questions, evidence, policy) must re-run `cmd/calibrate` with held-out
    seeds and keep **zero false HOSTILE** on benign controls. Commit the regenerated
    `data/tier2/policy.yaml`.
-6. CI must be green: build, vet, staticcheck, tests with `-race`, govulncheck, Tier-1 recall gate and
-   determinism.
+6. `make check` must pass locally (there is no hosted CI): gofmt, build, vet, staticcheck, tests
+   (`-race` where cgo is available), govulncheck, the Tier-1 recall gates and red-team determinism.
 7. Every new Go file starts with the SPDX header:
 
    ```go

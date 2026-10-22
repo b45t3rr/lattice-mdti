@@ -125,6 +125,25 @@ When connected to a Lattice Sandbox, MDTI:
 ISR tasking (`VisualId` / `Investigate`) to a simulated patrol agent (`cmd/agent`) is optional and
 off in the demo (`-tasking=false`).
 
+### In the Lattice C2
+
+Screenshots from the live demo on a Lattice Sandbox (2026-10-22). Each track panel shows four
+things:
+- the disposition MDTI set;
+- a **Simulated** badge, because the threats are injected at the data layer;
+- the measured inconsistency under **Activity**;
+- the override under **Data Overrides**, which records who made the change and why.
+
+| | |
+|---|---|
+| ![Ghost track near Morón: Hostile, first-fix marker and alert ring](docs/c2/1-ghost.png) | ![Impossible flight physics: the 12 NM jump drawn as a red line](docs/c2/2-impossible-physics.png) |
+| **Ghost track** · first seen 8.0 NM from Morón with no history | **Impossible physics** · 22.2 km in 3 s, Mach 22 |
+| ![GPS spoofing: GNSS altitude 1100 ft away from baro](docs/c2/3-gps-spoofing.png) | ![AIS switched off at the 200 NM line](docs/c2/4-ais-off-milla-201.png) |
+| **GPS spoofing** · GNSS +1100 ft from baro, NACp 4 | **AIS off at the Milla 201** · heading into the EEZ, turned 70° |
+
+<sub>In the last capture the alert ring sits on the intercept point; since v1.1.0 it sits on the
+vessel's last report.</sub>
+
 ## Verified results
 
 | | Result |
@@ -162,7 +181,8 @@ internal/       rx (adsb, ais, sbs, sources, redteam, replay, synth, bus) · tie
 data/geo/       Marine Regions EEZ polygons and 200 NM lines (unmodified, hash-pinned) + zone policy
 data/tier2/     calibrated decision policy (thresholds + calibration record)
 scenarios/      red-team attack scenarios (YAML)
-docs/           SOURCES.md (receivers and adapters), demo recording
+docs/           SOURCES.md (receivers and adapters), demo recording, C2 screenshots
+scripts/        check.sh: every check a pull request must pass
 SPEC.md         master specification and verification log
 ```
 
@@ -185,7 +205,8 @@ escalation always requires an operator. See [`SECURITY.md`](SECURITY.md).
 ## Contributing
 
 Contributions are welcome, especially new source adapters ([`docs/SOURCES.md`](docs/SOURCES.md))
-and detectors. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) (spec-first workflow and verification
+and detectors. There is no hosted CI: `make check` (or `bash scripts/check.sh`) runs every check a
+pull request must pass. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) (spec-first workflow and verification
 requirements) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately as
 described in [`SECURITY.md`](SECURITY.md). Changes are tracked in [`CHANGELOG.md`](CHANGELOG.md).
 

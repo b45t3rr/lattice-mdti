@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- C2 screenshots from the live demo in the README (`docs/c2/`).
+- `make check` (`scripts/check.sh`) runs every pull-request check locally.
+
+### Removed
+
+- Hosted CI (GitHub Actions workflows, CodeQL, Dependabot version updates). The same checks run
+  with `make check`.
+
 ## [1.1.0] — 2026-10-22
 
 First public release.
@@ -81,4 +93,5 @@ Tagged locally but never released: its tree did not build because `.gitignore` e
 - Open-source scaffolding: Apache-2.0, NOTICE, SECURITY, CONTRIBUTING, Code of Conduct, CI (race,
   staticcheck, govulncheck, recall and determinism gates), CodeQL, Dependabot.
 
+[Unreleased]: https://github.com/b45t3rr/lattice-mdti/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/b45t3rr/lattice-mdti/releases/tag/v1.1.0

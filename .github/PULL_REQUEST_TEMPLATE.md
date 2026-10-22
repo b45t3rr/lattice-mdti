@@ -4,8 +4,8 @@
 
 ## Verification
 
-- [ ] `go test ./...` passes; new or changed behaviour has tests (detectors: positive **and** negative)
-- [ ] `make lint vuln evaluate determinism` passes
+- [ ] `make check` (or `bash scripts/check.sh`) passes; paste its last line
+- [ ] New or changed behaviour has tests (detectors: positive **and** negative)
 - [ ] Lattice changes were verified against a live Sandbox and read back from a separate process (`cmd/validate`). What I ran:
 - [ ] Tier-2 changes: `cmd/calibrate` re-run with held-out seeds, zero false HOSTILE, `data/tier2/policy.yaml` committed
 - [ ] SPEC updated in this PR
