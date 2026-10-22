@@ -1,50 +1,49 @@
 # Recording the demo
 
-The demo has two views that are best recorded together:
+The demo runs four acts in detection-only mode: no asset is dispatched. Each act is injected at
+the data layer, then detected, decided and drawn on the map with the evidence of the
+inconsistency.
 
-1. **Terminal**: `make demo` records the narration to `docs/demo/demo.cast` and renders
-   `docs/demo/demo.gif` automatically.
-2. **Lattice map**: the ghost turning HOSTILE and SENTINEL-1 flying the intercept. This is the
-   Lattice web UI, so record it with a screen recorder (for example OBS Studio).
+| Act | Threat | Detected at about | Where to look |
+|---|---|---|---|
+| 1 | Ghost aircraft `ICAO E3F00D` | 00:28 | Morón (SADM), inside the orange 15 NM watch ring |
+| 2 | Impossible physics, airliner `ARG1234` jumps 12 NM | 01:48 | South of Ezeiza towards La Plata: red jump line |
+| 3 | GPS spoofing, airliner `ARG5678` | 03:10 | Río de la Plata |
+| 4 | AIS switched off, fishing vessel | 08:40 | Milla 201, ~46°S 61°W: cyan 200 NM line, AIS OFF marker, dashed estimated track |
 
-## Before you record
+## Terminal recording (the README GIF)
 
-- Stop any other MDTI agent (`cmd/agent`). The demo refuses to start while another instance drives
-  the assets.
-- Fill in `.env` (Lattice, AISStream and OpenAI credentials). The demo sets `AUTONOMY_LEVEL=autonomous`
-  for its own daemon only.
-- **Privacy:**
-  - The Lattice URL and some UI panels contain your **environment id**. Crop the browser address bar
-    and hide any panel that shows tokens or the environment hostname.
-  - The terminal output already redacts the hostname (`***.env.sandboxes…`).
-  - Never record `.env` or a shell history that contains tokens.
+```sh
+make build
+./bin/demo -offline -open=false -cast docs/demo/demo.cast   # no accounts needed
+go run ./tools/cast2gif -in docs/demo/demo.cast -out docs/demo/demo.gif -idle 1.2
+```
 
-## Lattice view: what to frame
+`make demo` does the same against a real Lattice Sandbox (it needs `.env`) and renders the GIF.
 
-Centre the map on Morón (−34.676, −58.643) at roughly a 40 km zoom. Then:
+## Map recording
 
-| Demo time | What appears in Lattice |
-|---|---|
-| ~00:05 | SENTINEL-1 parked at Morón (friendly UAV symbol), live AMBA traffic (neutral symbols) |
-| ~00:31 | The ghost `ICAO E3F00D` appears 8 NM north-west of Morón (unknown symbol) |
-| ~00:35 | The ghost turns **hostile** (red symbol). Its description shows the `[MDTI]` operator log and evidence path |
-| ~00:36 | A VisualId task appears for SENTINEL-1 and moves to EXECUTING |
-| 00:37–02:35 | SENTINEL-1 flies the intercept (about 14 km) and orbits or trails the ghost |
-| ~02:35 | Task DONE_OK; SENTINEL-1 returns to Morón |
+- **Offline:** the sandbox map at `http://127.0.0.1:8740/`. Leave "Follow alerts" on and it flies
+  to each alert. The Alerts panel lists every inconsistency with its evidence.
+- **Lattice C2:** run `make demo` and record the Lattice web UI with a screen recorder (for example
+  OBS Studio). Click a track to show the disposition override (Data Overrides). Use the timeline
+  ("Last Hour") to replay the ghost appearing and the jump.
 
-Tip: open the ghost's entity panel at ~00:35 to show the disposition override and the operator note.
+Pass `-hold 10m` to keep everything on screen after the last act.
 
-## Producing the final video
+## Privacy
 
-1. Start the screen recorder on the Lattice tab.
-2. Run `make demo` in a terminal.
-3. Stop the recorder when the terminal prints `CLEANUP`.
-4. Combine the terminal GIF and the map recording side by side, for example with ffmpeg:
+- The Lattice URL and some UI panels contain your **environment id**. Crop the browser address bar
+  and hide any panel that shows tokens or the environment hostname.
+- The terminal output already redacts the hostname (`***.env.sandboxes…`).
+- Never record `.env` or a shell history that contains tokens.
 
-   ```sh
-   ffmpeg -i lattice.mp4 -i docs/demo/demo.gif -filter_complex \
-     "[1:v]scale=-1:720[t];[0:v]scale=-1:720[m];[m][t]hstack" -c:v libx264 -crf 23 demo.mp4
-   ```
+## Producing a side-by-side video
 
-   The GIF compresses idle time (`-idle 1.2`), so for a time-aligned side-by-side render the GIF with
-   `-idle 1000` (no compression).
+```sh
+ffmpeg -i map.mp4 -i docs/demo/demo.gif -filter_complex \
+  "[1:v]scale=-1:720[t];[0:v]scale=-1:720[m];[m][t]hstack" -c:v libx264 -crf 23 demo.mp4
+```
+
+The GIF compresses idle time (`-idle 1.2`). For a time-aligned side-by-side, render it with
+`-idle 1000` (no compression).

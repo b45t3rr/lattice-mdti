@@ -93,27 +93,36 @@ C2 response through Anduril Lattice.
 ├── Makefile                     test | lint | run | redteam | agent | validate
 ├── cmd/
 │   ├── mdti/                    main daemon: rx → ing → tier1 → tier2 → c2
-│   │                            flags: --modules=rx,ing,tier1,tier2,c2  --dry-run  --redteam=<yaml>
-│   │                                   --record=<file.jsonl>  --replay=<file.jsonl>
+│   │                            flags: --sources=<list> --modules=rx,ing,tier1,tier2 --tasking --dry-run
+│   │                                   --redteam=<yaml> --record=<file.jsonl> --replay=<file.jsonl>
 │   ├── redteam/                 standalone adversary injector CLI (writes groundtruth.jsonl)
 │   ├── agent/                   simulated patrol assets (SEPARATE process — a real Tasks API agent)
-│   ├── validate/                separate-process live round-trip checker (entities / tasks / objects)
-│   └── calibrate/               Tier 2 threshold calibration on labelled replays (§7.8)
+│   ├── validate/                separate-process live round-trip checker (entities / tasks / objects, C2 probes)
+│   ├── calibrate/               Tier 2 threshold calibration on labelled replays (§7.8)
+│   ├── evaluate/                Tier 1 scoring against ground truth (recall gate)
+│   ├── demo/                    4-act detection-only demo (live or -offline)
+│   └── sim/                     offline sandbox: Lattice REST subset + Decisions stub + map (§10.3)
 ├── internal/
 │   ├── config/                  env + .env loading, typed Config, validation, secret redaction
 │   ├── domain/                  transport-agnostic contracts (§3) — no Lattice/OpenAI imports
 │   ├── geo/                     haversine, destination, bearing, ENU, PIP, signed boundary distance, EEZ loader
 │   ├── rx/
 │   │   ├── bus/                 fan-in / fan-out, per-entity backpressure (latest-wins)
-│   │   ├── adsb/                Source interface + readsb HTTP providers: adsb.fi (default), adsb.lol
-│   │   ├── ais/                 AISStream WebSocket client (reconnect, backoff+jitter, static/position merge)
+│   │   ├── adsb/                Source interface + readsb HTTP: adsb.fi (default), adsb.lol, local aircraft.json
+│   │   ├── ais/                 AISStream WebSocket client + local NMEA (!AIVDM) over UDP/TCP (§4.5)
+│   │   ├── sbs/                 local receiver BaseStation feed (TCP 30003)
+│   │   ├── sources/             -sources / SOURCES parser
+│   │   ├── synth/               synthetic background traffic (offline demo)
 │   │   ├── replay/              JSONL recorder & replayer (virtual clock)
 │   │   └── redteam/             scenario engine + 4 generators, seeded RNG, ground-truth writer
 │   ├── lattice/                 client factory (auth, headers, two http.Clients), SIDC builder, literal constants
 │   ├── ing/                     Frame → *Lattice.Entity mapper, coalescing publisher, expiry & dead-reckoning policy
 │   ├── tier1/                   sharded per-entity ring buffers, 5 detectors, cooldown/dedup
 │   ├── tier2/                   Decisions API client, brief/ + questions/ (versioned), policy/ (thresholds), guardrails, fallback
-│   ├── c2/                      reclassifier (OverrideEntity), tasker (CreateTask), asset selection, evidence (Objects)
+│   ├── c2/                      reclassifier (OverrideEntity), evidence headlines + map layers, optional tasker
+│   ├── evidence/                decision evidence upload (Objects)
+│   ├── viz/                     map layers (TEMPLATE_GEO), evidence charts, simulated EO/IR frames
+│   ├── sim/                     offline sandbox server and map
 │   └── agent/                   asset model, kinematics, task state machine, SSE listener
 ├── data/geo/
 │   ├── zones.yaml               maritime zone registry (§6.6.1) — id, file, sha256, legal_status, policy
@@ -122,6 +131,9 @@ C2 response through Anduril Lattice.
 │   └── aerodromes.json          SADM, SAEZ, SABE, SAVC, SAWE (ICAO, lat, lon, elev, runways)
 ├── scenarios/
 │   ├── kinematic.yaml  baro_gnss.yaml  ghost_sadm.yaml  dark_vessel_eez.yaml
+│   └── demo_ghost.yaml  demo_kinematic.yaml  demo_gnss.yaml  demo_dark.yaml   (cmd/demo acts)
+├── tools/                       cast2gif (README GIF), receiver-sim (fake local receiver)
+├── docs/                        SOURCES.md (receivers + adapter guide), demo/ (recording)
 └── testdata/                    recorded adsb.lol / AISStream payloads, golden entities, recorded OpenAI responses
 ```
 
@@ -132,6 +144,7 @@ C2 response through Anduril Lattice.
 | `github.com/anduril/lattice-sdk-go/v5` v5.2.0 | Entities, Tasks, Objects (REST + SSE) |
 | `github.com/openai/openai-go/v3` **v3.85.0** (Decisions API requires ≥ 3.73.0) | Tier 2 — `client.Decisions.New` |
 | `github.com/coder/websocket` | AISStream |
+| `github.com/BertoldVdb/go-ais` v0.4.0 (MIT) | AIS NMEA 0183 decoding for local receivers (§4.5) |
 | `github.com/paulmach/orb` | GeoJSON decode, Douglas–Peucker simplification |
 | `github.com/joho/godotenv` | optional `.env` loading |
 | `gopkg.in/yaml.v3` | scenario files |
@@ -536,7 +549,7 @@ The payload body inside the `Any` (expected shape: an objective referencing the 
 
   The 500/day cap makes adsb.lol unusable at 1 Hz (it is exhausted in about 8 minutes), so it stays a
   low-rate fallback. The interval is clamped to the provider floor automatically.
-- Interface (so an SBS/Beast TCP adapter can be added without touching consumers):
+- Interface (every source, aggregator or local receiver, implements it; see §4.5):
 
 ```go
 type Source interface {
@@ -637,6 +650,32 @@ params:
   or clean up afterwards.
 
 ---
+
+### 4.5 Local receivers and source selection (`-sources` / `SOURCES`)
+
+Anyone with a receiver can feed MDTI directly. Every adapter emits the same `domain.Frame`, leaves
+unreported fields nil, sanitizes untrusted text with `domain.SanitizeIdent`, tags `Frame.Source`
+(which is stripped before Tier 1) and reconnects with backoff. User guide: `docs/SOURCES.md`.
+
+| Entry | Package | Protocol | Notes |
+|---|---|---|---|
+| `adsb` | `internal/rx/adsb` | readsb HTTP aggregator (§4.1) | `ADSB_SOURCE` picks the provider |
+| `aisstream` (`ais`) | `internal/rx/ais` | AISStream WebSocket (§4.2) | needs `AISSTREAM_API_KEY` |
+| `readsb:<url>` | `internal/rx/adsb` (`NewLocalSource`) | a receiver's `aircraft.json` | `now` in **seconds** there, milliseconds on aggregators: `Parse` handles both |
+| `sbs:<host:port>` | `internal/rx/sbs` | BaseStation CSV over TCP (port 30003) | partial updates merged per ICAO; no `alt_geom` / NIC / NACp, so D2 and the integrity check never fire |
+| `nmea-udp:<addr>` / `nmea-tcp:<host:port>` | `internal/rx/ais` (`NMEA`) | NMEA 0183 `!AIVDM`/`!AIVDO` | types 1/2/3, 5, 18, 19, 24; multi-fragment reassembly; static data joined; decoder `github.com/BertoldVdb/go-ais` (MIT) |
+| `synthetic` | `internal/rx/synth` | generated | offline demo background traffic (§10.3) |
+
+`internal/rx/sources` parses and validates the list. The flag overrides `SOURCES`, whose default is
+`adsb,ais`. For a local antenna, `ADSB_CENTER_*` and `ADSB_RADIUS_NM` describe the antenna position
+and range, which D3 uses for the coverage-edge test.
+`tools/receiver-sim` serves synthetic traffic in all three local formats and can inject a teleport,
+so the adapters can be exercised without hardware.
+
+**Verified (2026-10-22):**
+- `receiver-sim` to `mdti -modules=rx,tier1 -sources=sbs:…,nmea-udp:…`: 10 aircraft and 14
+  vessels, with the injected teleport raised as `KINEMATIC_IMPOSSIBLE` (D1.R2) and no other anomaly.
+- `-sources=readsb:http://127.0.0.1:8080`: 10 aircraft and no anomalies.
 
 ## 5. Module 2 — ING: Lattice entity sync engine
 
@@ -1194,6 +1233,28 @@ A later `anomaly_confirmed=false` does **not** clear an override; clearing is an
 
 C2 also starts ING's dead-reckoning mode (§5.4) when a decision confirms an `AIS_DARK_EEZ` anomaly.
 
+### 8.1.1 Evidence on the map and detection-only mode
+
+For every confirmed anomaly, C2 publishes `TEMPLATE_GEO` layers (`internal/viz`): an alert area,
+and a hazard point whose name is the **evidence headline** (`c2.Evidence`). The headline is built
+only from the anomaly's own metrics and window, never from attacker-controlled identifiers.
+
+| Anomaly | Headline | Extra geometry |
+|---|---|---|
+| `KINEMATIC_IMPOSSIBLE` | `IMPOSSIBLE KINEMATICS · 22.2 km in 3 s · 7,443 m/s (Mach 22)` | red line between the two reports (`mdti-evidence-jump-*`) |
+| `BARO_GNSS_DIVERGENCE` | `GNSS/BARO MISMATCH · GNSS altitude +1100 ft from baro (+725 ft off its baseline) · NACp 4` | n/a |
+| `GHOST_TRACK` | `GHOST TRACK · first seen 8.0 NM from SADM, airborne, no track history` | hazard point at the first fix (`mdti-evidence-spawn-*`) |
+| `AIS_DARK_EEZ` | `AIS SILENT 3m12s · last report 5.0 NM outside the 200 NM line · heading into the EEZ (32° off the inward normal) · turned 70° before going silent` | dead-reckoned track and AIS OFF marker (§5.4) |
+
+`mdti -tasking=false` sets `c2.Controller.DetectionOnly`. Decisions still override the disposition,
+annotate the track and draw the evidence, but no task is created (`skipped="detection-only mode"`).
+The demo always runs this way. 200 NM lines are labelled by Marine Regions `line_id`: the primary
+line (the first configured) is cyan, and the others (disputed claims) are orange.
+
+**Verified live (2026-10-22, new Sandbox):** all four demo acts were reclassified with their alert,
+headline and evidence layers, and read back with `cmd/validate get`. The C2 renders the jump line
+and the hazard points.
+
 ### 8.2 Asset selection
 
 | Asset | EntityID | Home | Domain | Cruise | Endurance |
@@ -1391,6 +1452,29 @@ rejected by the guardrails. The box is configured in `data/tier2/policy.yaml`.
 A **live round-trip read back by a separate process** is the acceptance criterion for every phase
 that touches Lattice. A process that runs without errors proves nothing, because wrong enum literals
 are only rejected by the server.
+
+### 10.3 Offline sandbox (`cmd/sim`, `make demo-offline`)
+
+The offline sandbox lets anyone run the full pipeline without Lattice or OpenAI credentials. It
+is a **demonstration aid, not a test oracle**: the offline sandbox never replaces live
+verification (§10.2).
+
+- **Scope:** an in-memory model of the REST endpoints MDTI calls, and only those:
+  `PUT /api/v1/entities`, `GET /api/v1/entities/{id}`, entity override `PUT`/`DELETE` (only
+  `mil_view.disposition`), task create/get/status/cancel/query, `POST /api/v1/agent/stream` (SSE,
+  heartbeats), and the objects API. It models the behaviour seen on the live Sandbox: required
+  provenance and expiry, overrides that survive later publishes, `DISPOSITION_UNKNOWN` omitted on
+  read, strictly increasing status versions, and final terminal states. Any other path returns 501.
+- **Tier 2:** `POST /v1/decisions` replays per-anomaly-type answers recorded from `gpt-6-luna`
+  (§7.8) and reports `model: offline-stub (recorded answers)`. The deterministic policy, guardrails
+  and C2 run unchanged.
+- **Wiring:** unchanged binaries. The demo sets `LATTICE_ENDPOINT=http://127.0.0.1:8740` and
+  `OPENAI_BASE_URL=http://127.0.0.1:8740/v1`. Plain HTTP is refused for any non-loopback host.
+  `cmd/sim` binds to loopback only, because it has no authentication.
+- **Traffic:** `mdti -sources=synthetic` generates `SYN`-labelled aircraft and vessels. A test
+  replays 30 min of it through Tier 1 and requires zero anomalies.
+- **Map:** `GET /` serves a live map of the sandbox state (`GET /sim/state`), permanently
+  labelled "SIMULATED LATTICE · NOT REAL DATA".
 
 ---
 

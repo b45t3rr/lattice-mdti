@@ -26,6 +26,12 @@ make lint vuln                # go vet + staticcheck, govulncheck
 make evaluate determinism     # Tier-1 recall gate, red-team determinism
 ```
 
+Most work needs no account at all: `make demo-offline` runs the whole pipeline on the offline
+sandbox, and `go run ./tools/receiver-sim` stands in for a local receiver.
+
+**New source adapters are very welcome.** Follow the guide in [`docs/SOURCES.md`](docs/SOURCES.md)
+("Write a new source"), and test with synthetic data only.
+
 Live checks need a Lattice Sandbox (`LATTICE_ENDPOINT`, `ENVIRONMENT_TOKEN`, `SANDBOXES_TOKEN`), an
 `AISSTREAM_API_KEY` and an `OPENAI_API_KEY` in `.env` (see [`.env.example`](.env.example)).
 
