@@ -1,0 +1,21 @@
+# Demo act 3 (cmd/demo): GPS spoofing of an airliner crossing the Río de la
+# Plata towards Buenos Aires: GNSS altitude drifts away from baro.
+name: gnss_spoof_demo
+attack: baro_gnss
+seed: 42
+start_after: 2m
+target:
+  mode: synthesize
+params:
+  icao24: e0babe
+  callsign: ARG5678
+  start_lat: -34.62
+  start_lon: -58.05
+  heading_deg: 250        # westbound over the river, towards SENTINEL-2's station
+  normal_duration: 60s
+  ramp_ft_per_s: 80
+  max_offset_ft: 3000
+  nac_p_spoofed: 4
+  nic_spoofed: 3
+  attack_duration: 90s
+  rate_hz: 1

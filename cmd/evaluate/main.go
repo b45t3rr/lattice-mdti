@@ -73,6 +73,7 @@ func run(framesPath, truthPath, outPath string, warmup, tail time.Duration, minR
 	tc.CoverageCenter = geo.Point{Lat: cfg.ADSB.CenterLat, Lon: cfg.ADSB.CenterLon}
 	tc.CoverageRadiusNM = cfg.ADSB.RadiusNM
 	tc.Cooldown = cfg.Tier1Cooldown
+	tc.DarkMinGap = cfg.Tier1DarkMinGap
 	eng := tier1.New(tc, zones, aerodromes)
 
 	start := time.Now()

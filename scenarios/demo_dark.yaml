@@ -1,0 +1,21 @@
+# Demo act 4 (cmd/demo): dark fishing vessel at the "Milla 201". Its silence is
+# detected after the demo profile's shortened threshold (TIER1_DARK_MIN_GAP=3m).
+name: dark_vessel_demo
+attack: dark_vessel
+seed: 42
+start_after: 150s
+params:
+  mmsi: "200000001"       # MID 200 is unallocated: synthetic, no real flag implied
+  ship_name: SYNTHETIC SQUID 1
+  ship_type: 30
+  length_m: 65
+  start_lat: -46.40
+  start_lon: -60.80
+  course_deg: 15
+  speed_kt: 9
+  cruise_duration: 3m
+  turn_deg: -70
+  reports_after_turn: 2
+  report_interval: 10s
+  dark_min_gap: 3m        # ground truth follows the demo profile threshold
+  truth_horizon: 30m

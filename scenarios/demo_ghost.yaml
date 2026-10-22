@@ -1,5 +1,5 @@
-# Demo scenario (cmd/demo): the SADM ghost, injected 25 s after start-up
-# (after the 20 s Tier-1 warm-up) and kept alive long enough for the intercept.
+# Demo act 1 (cmd/demo): the SADM ghost, injected 25 s after start-up
+# (after the 20 s Tier-1 warm-up).
 name: ghost_sadm_demo
 attack: ghost
 seed: 42

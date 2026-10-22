@@ -1,0 +1,18 @@
+# Demo act 2 (cmd/demo): impossible kinematics. A synthetic airliner flies
+# normally for 60 s, then its position report jumps 12 NM abeam in 2 s
+# (implied ≈ 11 000 m/s, Mach ≈ 33): no aircraft can do that.
+name: kinematic_demo
+attack: kinematic
+seed: 42
+start_after: 45s
+target:
+  mode: synthesize
+params:
+  icao24: e0c0de
+  callsign: ARG1234
+  mode: teleport
+  normal_duration: 60s
+  jump_nm: 12
+  jump_seconds: 2
+  attack_duration: 5m
+  rate_hz: 1

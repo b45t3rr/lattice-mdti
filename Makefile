@@ -1,6 +1,6 @@
 SCENARIOS := scenarios/kinematic.yaml,scenarios/baro_gnss.yaml,scenarios/ghost_sadm.yaml,scenarios/dark_vessel_eez.yaml
 
-.PHONY: build test vet lint vuln rx redteam replay determinism evaluate calibrate agent demo
+.PHONY: build test vet lint vuln rx redteam replay determinism evaluate calibrate agent demo demo-offline sim receiver-sim
 
 build:
 	go build -o bin/ ./cmd/... ./tools/...
@@ -51,3 +51,18 @@ agent:
 demo: build
 	./bin/demo -cast docs/demo/demo.cast
 	go run ./tools/cast2gif -in docs/demo/demo.cast -out docs/demo/demo.gif -idle 1.2
+
+# Offline demo: no Lattice or OpenAI account. Starts the offline sandbox
+# (simulated Lattice + Decisions stub with recorded answers), opens its live
+# map in the browser and runs the same three acts on synthetic traffic.
+demo-offline: build
+	./bin/demo -offline -hold 2m
+
+# Offline sandbox on its own (map at http://127.0.0.1:8740/).
+sim:
+	go run ./cmd/sim
+
+# A fake local receiver (SBS :30003, aircraft.json :8080, AIS NMEA to UDP :10110) for trying
+# the local-source adapters without hardware; one aircraft jumps 12 NM after 60 s.
+receiver-sim:
+	go run ./tools/receiver-sim -teleport 60s

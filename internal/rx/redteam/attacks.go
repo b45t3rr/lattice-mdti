@@ -201,9 +201,13 @@ type baroGNSSParams struct {
 	RampFtPerSec float64       `yaml:"ramp_ft_per_s"`
 	MaxOffsetFt  float64       `yaml:"max_offset_ft"`
 	NACpSpoofed  int           `yaml:"nac_p_spoofed"`
-	NICSpoofed   int           `yaml:"nic_spoofed"`
-	Attack       time.Duration `yaml:"attack_duration"`
-	RateHz       float64       `yaml:"rate_hz"`
+	// Optional synthetic-airliner placement (zero values keep the default track).
+	StartLat   float64       `yaml:"start_lat"`
+	StartLon   float64       `yaml:"start_lon"`
+	HeadingDeg float64       `yaml:"heading_deg"`
+	NICSpoofed int           `yaml:"nic_spoofed"`
+	Attack     time.Duration `yaml:"attack_duration"`
+	RateHz     float64       `yaml:"rate_hz"`
 }
 
 func defaultBaroGNSS() baroGNSSParams {
@@ -218,7 +222,16 @@ func (p *baroGNSSParams) validate() error {
 	return nil
 }
 
-func (p *baroGNSSParams) synthTarget() Track { return syntheticAirliner(p.ICAO, p.Callsign) }
+func (p *baroGNSSParams) synthTarget() Track {
+	t := syntheticAirliner(p.ICAO, p.Callsign)
+	if p.StartLat != 0 || p.StartLon != 0 {
+		t.Pos = geo.Point{Lat: p.StartLat, Lon: p.StartLon}
+	}
+	if p.HeadingDeg != 0 {
+		t.TrackDeg = p.HeadingDeg
+	}
+	return t
+}
 
 func (p *baroGNSSParams) hijacked() { p.Normal = 0 }
 
