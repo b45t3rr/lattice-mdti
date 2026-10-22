@@ -76,8 +76,13 @@ func Evidence(ev domain.AnomalyEvent) (headline string, layers []viz.Layer) {
 			where = fmt.Sprintf("%.1f NM outside the 200 NM line", d)
 		}
 		headline = fmt.Sprintf("AIS SILENT %s · last report %s", gap, where)
-		if m["dr_inside"] > 0 {
+		if ang, ok := m["inward_angle_deg"]; m["dr_inside"] > 0 {
 			headline += " · dead-reckoned position now inside the EEZ"
+		} else if ok {
+			headline += fmt.Sprintf(" · heading into the EEZ (%.0f° off the inward normal)", ang)
+		}
+		if turn := m["course_change_deg"]; turn >= 30 {
+			headline += fmt.Sprintf(" · turned %.0f° before going silent", turn)
 		}
 	case domain.AnomalyNavIntegrityDrop:
 		headline = "NAV INTEGRITY DROP · NIC/NACp collapsed"

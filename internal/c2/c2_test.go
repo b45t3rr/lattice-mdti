@@ -247,6 +247,10 @@ func TestEvidenceHeadlines(t *testing.T) {
 
 	h, _ = Evidence(domain.AnomalyEvent{Type: domain.AnomalyAISDarkEEZ, Metrics: map[string]float64{"gap_s": 192, "signed_dist_nm": 5, "dr_inside": 1}})
 	assert.Equal(t, "AIS SILENT 3m12s · last report 5.0 NM outside the 200 NM line · dead-reckoned position now inside the EEZ", h)
+
+	h, _ = Evidence(domain.AnomalyEvent{Type: domain.AnomalyAISDarkEEZ, Metrics: map[string]float64{
+		"gap_s": 192, "signed_dist_nm": 5, "dr_inside": 0, "inward_angle_deg": 12, "course_change_deg": 70}})
+	assert.Equal(t, "AIS SILENT 3m12s · last report 5.0 NM outside the 200 NM line · heading into the EEZ (12° off the inward normal) · turned 70° before going silent", h)
 }
 
 func TestPicksNearestIdleAsset(t *testing.T) {
